@@ -17,7 +17,12 @@ Permite transmitir áudio e vídeo de iPhones e iPads diretamente para o computa
 
 ### Passo 1: Clonar ou Baixar o Projeto
 ```bash
+# Via SSH:
 git clone git@github.com:francisco-efjr/LetMeSee.git
+
+# Ou via HTTPS:
+git clone https://github.com/francisco-efjr/LetMeSee.git
+
 cd LetMeSee
 ```
 *(Ou baixe e extraia o arquivo ZIP do repositório em uma pasta local).*

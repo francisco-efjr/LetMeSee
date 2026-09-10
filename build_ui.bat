@@ -19,8 +19,8 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-echo Compilando src\LetMeSeeApp.cs para LetMeSee.exe...
-"%CSC%" /nologo /target:winexe /optimize+ /out:"%~dp0LetMeSee.exe" "%~dp0src\LetMeSeeApp.cs" /r:System.dll,System.Drawing.dll,System.Windows.Forms.dll
+echo Compilando src\LetMeSeeApp.cs para LetMeSee.exe com icone personalizado...
+"%CSC%" /nologo /target:winexe /optimize+ /win32icon:"%~dp0installer\app_icon.ico" /out:"%~dp0LetMeSee.exe" "%~dp0src\LetMeSeeApp.cs" /r:System.dll,System.Drawing.dll,System.Windows.Forms.dll
 
 if %errorlevel% equ 0 (
     echo.

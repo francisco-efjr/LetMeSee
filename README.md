@@ -40,6 +40,7 @@ O Windows bloqueia portas de recepção por padrão. Para liberar as regras de r
 
 ### Passo 3: Iniciar o Serviço
 1. Dê dois cliques em **`iniciar.bat`**.
+   *(Na primeira execução, o script baixará automaticamente os componentes e codecs necessários de forma transparente).*
 2. Uma janela será aberta aguardando a conexão com a identificação:
    ```text
    LetMeSee - [seu.usuario]

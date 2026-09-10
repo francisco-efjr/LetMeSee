@@ -1,0 +1,15 @@
+# Temporarios e caches do Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs e arquivos de execucao
+*.log
+*.tmp
+*.zip
+
+# Caso queira NAO commitar os binarios no Git e usar apenas o download automatico,
+# descomente a linha abaixo:
+# bin/*
+# !bin/.gitkeep

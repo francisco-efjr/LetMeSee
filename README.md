@@ -1,60 +1,57 @@
 # LetMeSee
 
-Receptor de espelhamento de tela iOS (AirPlay) para estações de trabalho Windows.
+Receptor de espelhamento de tela iOS (AirPlay) para estacoes de trabalho Windows.
 
-Permite transmitir áudio e vídeo de iPhones e iPads diretamente para o computador, em tempo real, sem a necessidade de instalar aplicativos ou perfis adicionais no dispositivo móvel.
-
----
-
-## Pré-requisitos
-
-* Computador com Windows 10 ou 11.
-* iPhone ou iPad conectado à **mesma rede local/Wi-Fi** do computador.
+Permite transmitir audio e video de iPhones e iPads diretamente para o computador em tempo real, sem a necessidade de instalar aplicativos ou perfis adicionais no dispositivo movel.
 
 ---
 
 ## Como Instalar e Usar
 
-### Passo 1: Clonar ou Baixar o Projeto
+### Opcao 1: Instalador Oficial do Windows (Recomendado)
+
+A forma mais simples e pratica para a equipe:
+
+1. Acesse a pagina de [Releases do LetMeSee](https://github.com/francisco-efjr/LetMeSee/releases).
+2. Baixe o instalador **`LetMeSee-Setup.exe`**.
+3. Execute o instalador ("Avancar > Avancar > Concluir").
+   * O instalador cuida de tudo: cria as regras no Windows Firewall, instala o servico Bonjour e adiciona o icone na Area de Trabalho.
+4. Abra o **LetMeSee** pelo atalho na Area de Trabalho.
+
+---
+
+### Opcao 2: Execucao Portatil via Git
+
+Para desenvolvedores ou estacoes que preferem clonar o projeto:
+
 ```bash
-# Via SSH:
-git clone git@github.com:francisco-efjr/LetMeSee.git
-
-# Ou via HTTPS:
 git clone https://github.com/francisco-efjr/LetMeSee.git
-
 cd LetMeSee
 ```
-*(Ou baixe e extraia o arquivo ZIP do repositório em uma pasta local).*
+
+1. Execute **`configurar_firewall.bat`** como Administrador (apenas no primeiro dia).
+2. De dois cliques em **`iniciar.bat`** (ele compila e abre a interface visual automaticamente).
 
 ---
 
-### Passo 2: Configurar o Firewall (Apenas no primeiro uso)
-O Windows bloqueia portas de recepção por padrão. Para liberar as regras de rede:
+## A Interface Visual (LetMeSee.exe)
 
-1. Clique com o botão direito no arquivo **`configurar_firewall.bat`**.
-2. Selecione **Executar como Administrador**.
-3. Confirme na tela de segurança e aguarde a mensagem de sucesso.
+A aplicacao possui uma interface compacta e moderna, sem necessidade de telas pretas de terminal:
 
----
-
-### Passo 3: Iniciar o Serviço
-1. Dê dois cliques em **`iniciar.bat`**.
-   *(Na primeira execução, o script baixará automaticamente os componentes e codecs necessários de forma transparente).*
-2. Uma janela será aberta aguardando a conexão com a identificação:
-   ```text
-   LetMeSee - [seu.usuario]
-   ```
+* **Botao Liga / Desliga:** Inicia ou interrompe o espelhamento a qualquer momento com um clique.
+* **Nome no iPhone:** Exibe o nome exato para conexao (ex: `LetMeSee - seu.usuario`), com botao de copiar.
+* **IP da Rede:** Mostra o endereco IP local ativo para facilitar a validacao.
+* **Bandeja do Sistema (Tray):** Ao fechar a janela, o aplicativo pode continuar em execucao silenciosa proximo ao relogio do Windows.
 
 ---
 
-### Passo 4: Conectar o Dispositivo iOS
-1. No iPhone ou iPad, abra a **Central de Controle** (deslize o dedo do canto superior direito para baixo).
-2. Toque no botão **Espelhar a Tela** (ícone com dois retângulos).
-3. Selecione o identificador do seu computador: **`LetMeSee - [seu.usuario]`**.
-4. A tela do dispositivo será projetada instantaneamente.
+## Como Conectar pelo iPhone / iPad
 
-> Para finalizar a transmissão, feche a janela no computador ou toque em **Parar Espelhamento** no celular.
+1. Conecte o iPhone na **mesma rede Wi-Fi** do computador.
+2. Abra a **Central de Controle** (deslize o dedo a partir do canto superior direito da tela).
+3. Toque no botao **Espelhar a Tela** (icone com dois retangulos sobrepostos).
+4. Selecione o identificador do seu computador: **`LetMeSee - [seu.usuario]`**.
+5. A tela do dispositivo sera transmitida instantaneamente.
 
 ---
 
@@ -62,30 +59,30 @@ O Windows bloqueia portas de recepção por padrão. Para liberar as regras de r
 
 ```text
 LetMeSee/
-├── iniciar.bat               # Inicializador do serviço de espelhamento
-├── configurar_firewall.bat   # Script de configuração de regras de rede (Admin)
-├── diagnostico.bat           # Utilitário de diagnóstico de conexão
-├── bin/                      # Binários de execução e bibliotecas de vídeo
-├── scripts/                  # Automações PowerShell de execução e firewall
-└── README.md                 # Documentação de uso
+├── src/
+│   └── LetMeSeeApp.cs        # Codigo-fonte C# da interface grafica
+├── build_ui.bat              # Compilador local da interface via csc.exe nativo
+├── installer/
+│   └── setup.iss             # Script Inno Setup para gerar LetMeSee-Setup.exe
+├── .github/
+│   └── workflows/
+│       └── build-installer.yml # Esteira automatica de CI/CD para compilar o instalador
+├── iniciar.bat               # Launcher inteligente (abre a interface visual)
+├── configurar_firewall.bat   # Script de configuracao do Firewall do Windows
+├── diagnostico.bat           # Utilitario de diagnostico de rede e portas
+├── bin/                      # Motores de video (UxPlay, GStreamer, Bonjour)
+├── scripts/                  # Automacoes PowerShell de execucao e download
+└── README.md                 # Documentacao oficial
 ```
 
 ---
 
-## Resolução de Problemas Comuns
+## Resolucao de Problemas Comuns
 
-| Sintoma | Causa Provável | Ação Recomendada |
+| Sintoma | Causa Provavel | Acao Recomendada |
 | :--- | :--- | :--- |
-| O computador não aparece no iPhone | Dispositivos em redes diferentes | Certifique-se de que ambos estão no mesmo Wi-Fi. |
-| O computador não aparece no iPhone | Firewall bloqueando portas | Execute `configurar_firewall.bat` como Administrador. |
-| Uso simultâneo com VPN Corporativa | VPN bloqueando rede local | Nas configurações da sua VPN, habilite a opção **"Allow local LAN access"**. |
-| Rede Guest / Visitante | Isolamento de clientes (AP Isolation) | Utilize a rede corporativa padrão; redes de visitantes bloqueiam tráfego entre aparelhos. |
-| Dúvidas sobre endereçamento IP | Conexão de rede ativa | Execute `diagnostico.bat` para visualizar os IPs locais atribuídos à máquina. |
-
----
-
-## Distribuição Interna (Equipe de TI / Mantenedores)
-
-Para disponibilizar o projeto pronto para uso imediato aos colaboradores:
-1. Mantenha o executável `uxplay.exe` e suas respectivas bibliotecas DLL dentro da pasta `bin/`.
-2. Efetue o commit da pasta `bin/` no repositório corporativo. Dessa forma, qualquer membro da equipe precisará apenas clonar e executar, sem etapas de compilação ou download externo.
+| O computador nao aparece no iPhone | Dispositivos em redes diferentes | Certifique-se de que ambos estao no mesmo Wi-Fi. |
+| O computador nao aparece no iPhone | Firewall bloqueando portas | Execute `configurar_firewall.bat` como Administrador ou reinstale via `LetMeSee-Setup.exe`. |
+| Uso simultaneo com VPN Corporativa | VPN bloqueando rede local | Nas configuracoes da VPN, habilite **"Allow local LAN access"**. |
+| Rede Guest / Visitante | Isolamento de clientes (AP Isolation) | Utilize a rede corporativa principal; redes de visitantes bloqueiam conexoes locais. |
+| Validacao de IPs | Conexao ativa | Execute `diagnostico.bat` para verificar os IPs locais da maquina. |

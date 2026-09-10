@@ -1,0 +1,55 @@
+name: Build LetMeSee Windows Installer
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build GUI & Setup Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Compile C# GUI (LetMeSee.exe)
+        shell: cmd
+        run: |
+          call build_ui.bat
+
+      - name: Download and Prepare Binaries
+        shell: powershell
+        run: |
+          $binUrl = "https://github.com/francisco-efjr/LetMeSee/releases/download/v1.0.0/LetMeSee-bin.zip"
+          Write-Host "Baixando $binUrl..."
+          Invoke-WebRequest -Uri $binUrl -OutFile "LetMeSee-bin.zip"
+          Expand-Archive -Path "LetMeSee-bin.zip" -DestinationPath "bin" -Force
+          Remove-Item "LetMeSee-bin.zip" -Force
+
+      - name: Compile Inno Setup Installer
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
+          if (-not (Test-Path "dist\LetMeSee-Setup.exe")) {
+              throw "LetMeSee-Setup.exe nao foi gerado com sucesso."
+          }
+
+      - name: Upload Artifact (CI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LetMeSee-Setup
+          path: dist/LetMeSee-Setup.exe
+
+      - name: Publish Setup to GitHub Release (v1.0.0)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload v1.0.0 dist/LetMeSee-Setup.exe --clobber || true

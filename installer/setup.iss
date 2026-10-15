@@ -1,7 +1,7 @@
 ; Inno Setup 6 - builds an offline installer from the verified runtime staged by CI.
 #define MyAppName "LetMeSee"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.2.0"
 #endif
 #define MyAppPublisher "LetMeSee contributors"
 #define MyAppURL "https://github.com/francisco-efjr/LetMeSee"
@@ -46,7 +46,7 @@ Source: "..\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\bin\runtime-files.sha256"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "..\bin\*"; DestDir: "{app}\bin"; Excludes: "runtime-files.sha256,.gitkeep"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\scripts\*.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "..\config\dependencies.json"; DestDir: "{app}\config"; Flags: ignoreversion
+Source: "..\config\*.json"; DestDir: "{app}\config"; Flags: ignoreversion
 Source: "..\configurar_firewall.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\diagnostico.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\iniciar.bat"; DestDir: "{app}"; Flags: ignoreversion

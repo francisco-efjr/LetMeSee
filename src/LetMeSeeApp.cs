@@ -3,9 +3,10 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Net.NetworkInformation;
 using System.Threading;
 using System.Windows.Forms;
-using Timer = System.Windows.Forms.Timer;
+using Microsoft.Win32;
 
 namespace LetMeSee
 {
@@ -14,334 +15,178 @@ namespace LetMeSee
         [STAThread]
         private static void Main()
         {
-            // Prevent two receivers competing for the same ports in the current user session.
             using (Mutex instance = new Mutex(false, "Local\\LetMeSee.Desktop"))
             {
                 bool acquired;
-                try { acquired = instance.WaitOne(0, false); }
-                catch (AbandonedMutexException) { acquired = true; }
-                if (!acquired) { MessageBox.Show("O LetMeSee já está aberto. Procure o ícone na bandeja ou a janela na barra de tarefas.", "LetMeSee"); return; }
-                try
-                {
-                    Application.EnableVisualStyles();
-                    Application.SetCompatibleTextRenderingDefault(false);
-                    Application.Run(new MainForm());
-                }
+                try { acquired = instance.WaitOne(0, false); } catch (AbandonedMutexException) { acquired = true; }
+                if (!acquired) { MessageBox.Show("O LetMeSee já está aberto. Procure a janela ou o ícone na bandeja.", "LetMeSee"); return; }
+                try { Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); Application.Run(new MainForm()); }
                 finally { instance.ReleaseMutex(); }
             }
         }
     }
 
+    // The mirror surface has exactly two controls. All preparation lives in its own dialog.
     public sealed class MainForm : Form
     {
-        private readonly string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        private readonly SettingsStore store = new SettingsStore();
-        private readonly ReceiverService receiver;
+        private readonly string applicationDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        private readonly SettingsStore settingsStore = new SettingsStore();
+        private readonly ReceiverService airplay;
+        private readonly AndroidMirrorService android;
         private AppSettings settings;
-        private readonly Panel content = new Panel();
-        private readonly Label status = new Label();
-        private readonly Label footer = new Label();
-        private readonly Timer clock = new Timer();
-        private readonly ToolTip tips = new ToolTip();
+        private PreparationSelection selection;
+        private PreparationConfirmations confirmations = new PreparationConfirmations();
+        private DateTime preparedAt = DateTime.MinValue;
+        private readonly ActionButton environmentButton = new ActionButton("Selecionar ambiente", false);
+        private readonly ActionButton startButton = new ActionButton("Começar a espelhar", true);
+        private readonly Label state = new Label();
+        private readonly Label guidance = new Label();
         private NotifyIcon tray;
         private ContextMenuStrip trayMenu;
-        private ActionButton toggle;
-        private Label message;
-        private Label elapsed;
-        private SonarPanel sonar;
-        private ComboBox addresses;
-        private DateTime? startedAt;
-        private bool forceClose;
-        private string currentPage = "Espelhamento";
-        private ActionButton[] navigation;
-        private int diagnosticGeneration;
+        private int intention;
+        private string preparationNotice;
+        private bool checking;
         private bool disposed;
+        private bool forceClose;
+        private bool preparationInvalidated;
+        private readonly SonarPanel sonar = new SonarPanel();
 
         public MainForm()
         {
-            settings = store.Load(); receiver = new ReceiverService(appDirectory);
-            receiver.StateChanged += ReceiverChanged;
-            Text = "LetMeSee · Receptor AirPlay";
-            Font = DesignTokens.Body; ForeColor = DesignTokens.Text; BackColor = DesignTokens.Window;
+            settings = settingsStore.Load(); selection = EnvironmentStore.Load();
+            airplay = new ReceiverService(applicationDirectory); android = new AndroidMirrorService(applicationDirectory);
+            airplay.StateChanged += StateChanged; android.StateChanged += StateChanged;
+            Text = "LetMeSee"; Font = DesignTokens.Body; BackColor = DesignTokens.Window; ForeColor = DesignTokens.Text;
             AutoScaleMode = AutoScaleMode.Dpi; AutoScaleDimensions = new SizeF(96, 96);
-            ClientSize = new Size(1100, 780); MinimumSize = new Size(1040, 780);
-            StartPosition = FormStartPosition.CenterScreen;
-            string iconPath = Path.Combine(appDirectory, "app_icon.ico");
-            if (File.Exists(iconPath)) Icon = new Icon(iconPath);
-            else Icon = SystemIcons.Application;
-            BuildShell(); BuildTray(); ShowMirror();
+            ClientSize = new Size(820, 660); MinimumSize = new Size(700, 620); StartPosition = FormStartPosition.CenterScreen;
+            string iconPath = Path.Combine(applicationDirectory, "app_icon.ico"); Icon = File.Exists(iconPath) ? new Icon(iconPath) : SystemIcons.Application;
+            BuildSurface(); BuildTray();
+            Shown += delegate { sonar.Play(settings.EnableAnimation); OpenPreparation(); };
             FormClosing += ClosingRequested;
-            clock.Interval = 1000; clock.Tick += TickClock; clock.Start();
-            Shown += delegate
-            {
-                if (sonar != null) sonar.Play(settings.EnableAnimation);
-                if (!string.IsNullOrEmpty(store.LastError)) Notify("As preferências não puderam ser lidas. Os valores padrão estão em uso.");
-            };
+            SystemEvents.PowerModeChanged += PowerChanged;
+            NetworkChange.NetworkAddressChanged += NetworkChanged;
+            NetworkChange.NetworkAvailabilityChanged += NetworkAvailabilityChanged;
         }
-
-        private static Label TextLabel(string text, Font font, Color color, int width, int height)
+        private static Label Label(string text, Font font, Color color, int height)
+        { return new Label { Text = text, Font = font, ForeColor = color, AutoSize = false, Dock = DockStyle.Top, Height = height, TextAlign = ContentAlignment.MiddleCenter }; }
+        private void BuildSurface()
         {
-            return new Label { Text = text, Font = font, ForeColor = color, AutoSize = false, Width = width, Height = height, BackColor = Color.Transparent };
+            TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8, Padding = new Padding(48, 24, 48, 24) };
+            float[] sizes = { 44, 180, 62, 42, 64, 16, 64, 94 };
+            foreach (float size in sizes) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, size));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.Controls.Add(Label("LETMESEE  /  SUA TELA, POR PERTO.", DesignTokens.CaptionStrong, DesignTokens.Muted, 44), 0, 0);
+            sonar.Size = new Size(180, 180); sonar.Anchor = AnchorStyles.None; layout.Controls.Add(sonar, 0, 1);
+            layout.Controls.Add(Label("Sua tela. Só isso.", DesignTokens.HeroTitle, DesignTokens.Text, 62), 0, 2);
+            state.Text = "Prepare o ambiente para começar"; state.ForeColor = DesignTokens.Muted; state.Dock = DockStyle.Fill; state.TextAlign = ContentAlignment.MiddleCenter; state.AccessibleRole = AccessibleRole.StaticText;
+            layout.Controls.Add(state, 0, 3);
+            environmentButton.Dock = DockStyle.Fill; environmentButton.Margin = new Padding(80, 4, 80, 4); environmentButton.Click += delegate { OpenPreparation(); };
+            layout.Controls.Add(environmentButton, 0, 4);
+            startButton.Dock = DockStyle.Fill; startButton.Margin = new Padding(80, 4, 80, 4); startButton.Click += Toggle;
+            layout.Controls.Add(startButton, 0, 6);
+            guidance.ForeColor = DesignTokens.Muted; guidance.Dock = DockStyle.Fill; guidance.TextAlign = ContentAlignment.MiddleCenter; guidance.Padding = new Padding(0, 12, 0, 0);
+            layout.Controls.Add(guidance, 0, 7); Controls.Add(layout); UpdateSurface();
         }
-        private static void Place(Control parent, Control child, int x, int y) { child.Location = new Point(x, y); parent.Controls.Add(child); }
-        private static ActionButton Button(string text, bool primary, int width, EventHandler action)
-        {
-            ActionButton button = new ActionButton(text, primary) { Width = width }; button.Click += action; return button;
-        }
-        private SurfacePanel Card(int height)
-        {
-            return new SurfacePanel { Height = height, Width = Math.Max(760, content.ClientSize.Width - 48), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right };
-        }
-        private void BuildShell()
-        {
-            Panel sidebar = new Panel { Dock = DockStyle.Left, Width = 196, BackColor = DesignTokens.Surface };
-            Place(sidebar, TextLabel("LETMESEE", DesignTokens.Brand, DesignTokens.Text, 170, 36), 20, 30);
-            Place(sidebar, TextLabel("SUA TELA, POR PERTO.", DesignTokens.Fine, DesignTokens.Muted, 176, 28), 20, 67);
-            navigation = new ActionButton[3];
-            string[] pages = { "Espelhamento", "Diagnóstico", "Preferências" };
-            for (int i = 0; i < pages.Length; i++)
-            {
-                string page = pages[i];
-                navigation[i] = Button(page, false, 164, delegate { Navigate(page); });
-                navigation[i].TextAlign = ContentAlignment.MiddleLeft;
-                navigation[i].AccessibleDescription = "Abrir " + page;
-                Place(sidebar, navigation[i], 16, 132 + i * 52);
-            }
-            Label local = TextLabel("RECEPÇÃO LOCAL\n\nSem conta.\nSem telemetria no app.\nVocê decide quando ligar.", DesignTokens.Small, DesignTokens.Muted, 158, 125);
-            local.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; Place(sidebar, local, 20, ClientSize.Height - 160);
-            Panel top = new Panel { Dock = DockStyle.Top, Height = 92 };
-            Place(top, TextLabel("Estação de espelhamento", DesignTokens.NavigationTitle, DesignTokens.Text, 420, 40), 24, 20);
-            status.Text = "○ Desligado"; status.ForeColor = DesignTokens.Muted; status.Size = new Size(240, 28);
-            status.TextAlign = ContentAlignment.MiddleRight; status.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            Place(top, status, ClientSize.Width - sidebar.Width - 264, 31);
-            footer.Dock = DockStyle.Bottom; footer.Height = 34; footer.Padding = new Padding(24, 6, 0, 0);
-            footer.Font = DesignTokens.Small; footer.ForeColor = DesignTokens.Muted;
-            footer.Text = "AirPlay para Windows · o receptor começa desligado";
-            content.Dock = DockStyle.Fill; content.AutoScroll = true;
-            Panel body = new Panel { Dock = DockStyle.Fill }; body.Controls.Add(content); body.Controls.Add(footer); body.Controls.Add(top);
-            Controls.Add(body); Controls.Add(sidebar);
-        }
+        private bool Owned { get { return airplay.HasOwnedProcess || android.HasOwnedProcess; } }
+        private ReceiverState ActiveState { get { return selection.Device == DeviceFamily.IOS ? airplay.State : android.State; } }
         private void BuildTray()
         {
             trayMenu = new ContextMenuStrip();
             trayMenu.Items.Add("Abrir LetMeSee", null, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
-            trayMenu.Items.Add("Parar receptor", null, delegate { receiver.Stop(); });
+            trayMenu.Items.Add("Parar espelhamento", null, delegate { Stop(); });
             trayMenu.Items.Add("Sair", null, delegate { forceClose = true; Close(); });
-            tray = new NotifyIcon { Icon = Icon, Text = "LetMeSee · desligado", Visible = true, ContextMenuStrip = trayMenu };
+            tray = new NotifyIcon { Icon = Icon, Text = "LetMeSee · parado", ContextMenuStrip = trayMenu, Visible = true };
             tray.DoubleClick += delegate { Show(); WindowState = FormWindowState.Normal; Activate(); };
         }
-        private void Navigate(string page)
+        private void OpenPreparation()
         {
-            currentPage = page;
-            if (page == "Espelhamento") ShowMirror();
-            else if (page == "Diagnóstico") ShowDiagnostics();
-            else ShowPreferences();
-        }
-        private void ClearPage()
-        {
-            diagnosticGeneration++;
-            while (content.Controls.Count > 0) { Control control = content.Controls[0]; content.Controls.RemoveAt(0); control.Dispose(); }
-            toggle = null; message = null; elapsed = null; sonar = null; addresses = null;
-            for (int i = 0; i < navigation.Length; i++)
+            if (checking || Owned || ActiveState == ReceiverState.Starting) return;
+            InvalidatePreparation();
+            using (PreparationForm dialog = new PreparationForm(applicationDirectory, settings, selection))
             {
-                bool selected = navigation[i].Text == currentPage;
-                navigation[i].BackColor = selected ? DesignTokens.Raised : DesignTokens.Surface;
-                navigation[i].ForeColor = selected ? DesignTokens.Accent : DesignTokens.Muted;
-                navigation[i].FlatAppearance.BorderColor = selected ? DesignTokens.Accent : DesignTokens.Surface;
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    settings = dialog.Settings; selection = dialog.Selection; confirmations = dialog.Confirmations;
+                    preparedAt = DateTime.UtcNow; preparationInvalidated = false;
+                    bool saved = settingsStore.Save(settings) && EnvironmentStore.Save(selection);
+                    preparationNotice = saved ? "Checklist concluído. Os requisitos serão conferidos outra vez ao começar." : "Ambiente pronto nesta sessão. Não foi possível salvar suas preferências.";
+                }
             }
+            UpdateSurface();
         }
-        private void ShowMirror()
+        private void Toggle(object sender, EventArgs e)
         {
-            ClearPage();
-            SurfacePanel hero = Card(220); hero.BackColor = DesignTokens.Paper; hero.Paper = true;
-            Place(content, hero, 24, 0);
-            Place(hero, TextLabel("DO IPHONE PARA O SEU PC", DesignTokens.CaptionStrong, DesignTokens.Orange, 400, 28), 24, 22);
-            Place(hero, TextLabel("Sua tela.\nEm boa companhia.", DesignTokens.HeroTitle, DesignTokens.Ink, 460, 108), 22, 48);
-            Place(hero, TextLabel("Compartilhe uma ideia, apresente um app\nou veja tudo em uma tela maior.", DesignTokens.Body, DesignTokens.Ink, 440, 48), 24, 164);
-            sonar = new SonarPanel { Size = new Size(220, 200), Anchor = AnchorStyles.Right | AnchorStyles.Top };
-            Place(hero, sonar, hero.Width - 244, 10); sonar.Play(false);
-
-            SurfacePanel session = Card(112); Place(content, session, 24, 236);
-            message = TextLabel("Receptor desligado", DesignTokens.CardTitle, DesignTokens.Text, 450, 30); Place(session, message, 20, 16);
-            elapsed = TextLabel(settings.RequirePin ? "Código de conexão ativado · use uma rede privada." : "Sem código de conexão · use apenas uma rede de confiança.", DesignTokens.Small, DesignTokens.Muted, 445, 44); Place(session, elapsed, 20, 52);
-            toggle = Button("&Iniciar receptor", true, 220, ToggleReceiver); toggle.Height = 48;
-            toggle.Anchor = AnchorStyles.Right | AnchorStyles.Top; Place(session, toggle, session.Width - 240, 32);
-            tips.SetToolTip(toggle, "Anuncia este computador para dispositivos AirPlay na rede local. Alt+I para iniciar.");
-
-            SurfacePanel connection = Card(130); Place(content, connection, 24, 364);
-            Place(connection, TextLabel("NOME NO IPHONE", DesignTokens.Caption, DesignTokens.Muted, 280, 24), 20, 16);
-            Label name = TextLabel(settings.ReceiverName, DesignTokens.Name, DesignTokens.Text, 350, 40); name.AutoEllipsis = true;
-            Place(connection, name, 20, 44); tips.SetToolTip(name, settings.ReceiverName);
-            Place(connection, Button("&Copiar nome", false, 140, delegate { CopyName(); }), 20, 84);
-            Place(connection, TextLabel("REDE DO COMPUTADOR", DesignTokens.Caption, DesignTokens.Muted, 340, 24), 404, 16);
-            addresses = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 312, BackColor = DesignTokens.Raised, ForeColor = DesignTokens.Text, AccessibleName = "Endereços locais disponíveis" };
-            Place(connection, addresses, 404, 46);
-            Place(connection, Button("Atualizar rede", false, 148, delegate { RefreshNetwork(); }), 404, 84);
-            RefreshNetwork();
-
-            SurfacePanel guide = Card(112); Place(content, guide, 24, 510);
-            string[] steps = { "01  Conectar", "02  Espelhar", "03  Selecionar" };
-            string[] detail = { "iPhone e PC na mesma\nrede Wi-Fi de confiança.", "Abra a Central de Controle\ne toque em Espelhar a Tela.", "Escolha o nome do receptor.\nA imagem abre em outra janela." };
-            for (int i = 0; i < 3; i++)
-            {
-                Place(guide, TextLabel(steps[i], DesignTokens.Step, DesignTokens.Accent, 230, 28), 20 + i * 248, 16);
-                Place(guide, TextLabel(detail[i], DesignTokens.Small, DesignTokens.Muted, 232, 52), 20 + i * 248, 48);
-            }
-            UpdateState();
-        }
-        private void RefreshNetwork()
-        {
-            if (addresses == null) return;
-            addresses.Items.Clear();
-            foreach (NetworkAddress address in NetworkService.GetActiveIPv4()) addresses.Items.Add(address.Address + " · " + address.Name);
-            if (addresses.Items.Count == 0) addresses.Items.Add("Nenhuma rede local ativa");
-            addresses.SelectedIndex = 0;
-            tips.SetToolTip(addresses, "Lista de endereços para conferência. O UxPlay anuncia nas interfaces disponíveis; esta lista não restringe o acesso.");
-        }
-        private void ToggleReceiver(object sender, EventArgs e)
-        {
-            if (receiver.HasOwnedProcess || receiver.State == ReceiverState.Starting) receiver.Stop();
-            else
-            {
-                receiver.Start(settings.Clone());
-            }
-        }
-        private void ReceiverChanged(object sender, ReceiverStateChangedEventArgs e)
-        {
-            if (disposed || IsDisposed || !IsHandleCreated) return;
-            try { BeginInvoke(new Action(UpdateState)); } catch (InvalidOperationException) { }
-        }
-        private void UpdateState()
-        {
-            bool running = receiver.State == ReceiverState.Running;
-            bool starting = receiver.State == ReceiverState.Starting;
-            if (running && !startedAt.HasValue) startedAt = DateTime.UtcNow;
-            if (!running) startedAt = null;
-            status.Text = running ? "● Receptor ativo" : starting ? "◌ Verificando motor" : receiver.State == ReceiverState.Error ? "! Atenção" : "○ Desligado";
-            status.ForeColor = running ? DesignTokens.Success : receiver.State == ReceiverState.Error ? DesignTokens.Danger : DesignTokens.Muted;
-            tray.Text = running ? "LetMeSee · receptor ativo" : starting ? "LetMeSee · iniciando" : receiver.HasOwnedProcess ? "LetMeSee · conferir encerramento" : "LetMeSee · desligado";
-            if (toggle != null)
-            {
-                toggle.Text = receiver.HasOwnedProcess || starting ? "&Parar receptor" : "&Iniciar receptor";
-                toggle.AccessibleName = toggle.Text.Replace("&", "");
-                message.Text = running ? "Pronto para receber" : starting ? "Conferindo arquivos do motor…" : receiver.State == ReceiverState.Error ? "O receptor precisa de atenção" : "Receptor desligado";
-                message.ForeColor = receiver.State == ReceiverState.Error ? DesignTokens.Danger : DesignTokens.Text;
-                elapsed.Text = running && settings.RequirePin ? "Código AirPlay: " + receiver.SessionPin + " · digite no iPhone ao conectar." : receiver.State == ReceiverState.Stopped ? (settings.RequirePin ? "Código de conexão ativado · use uma rede privada." : "Sem código de conexão · use apenas uma rede de confiança.") : receiver.StatusMessage;
-            }
-            footer.Text = running ? "Receptor ativo · disponibilidade não confirma um iPhone conectado" : receiver.HasOwnedProcess ? "Atenção: confira o encerramento do motor antes de sair." : "AirPlay para Windows · recepção sob seu controle";
-            if (currentPage == "Preferências") ShowPreferences();
-        }
-        private void TickClock(object sender, EventArgs e)
-        {
-            if (!startedAt.HasValue) return;
-            TimeSpan duration = DateTime.UtcNow - startedAt.Value;
-            if (elapsed != null) elapsed.Text = (settings.RequirePin ? "Código AirPlay: " + receiver.SessionPin + " · " : "Sem PIN · ") + "Ativo há " + duration.ToString(@"hh\:mm\:ss") + " · " + (settings.SessionLimitMinutes == 0 ? "sem limite" : "limite de " + settings.SessionLimitMinutes + " min");
-        }
-        private void CopyName()
-        {
-            try { Clipboard.SetText(settings.ReceiverName); Notify("Nome do receptor copiado."); }
-            catch (System.Runtime.InteropServices.ExternalException) { Notify("A área de transferência está ocupada. Tente novamente."); }
-        }
-        private void Notify(string text) { footer.Text = text; }
-
-        private void ShowDiagnostics()
-        {
-            ClearPage();
-            Place(content, TextLabel("Vamos conferir a conexão.", DesignTokens.Heading, DesignTokens.Text, 700, 48), 24, 4);
-            Place(content, TextLabel("Verificações locais. Nenhuma informação é enviada.", DesignTokens.Body, DesignTokens.Muted, 700, 32), 24, 60);
-            SurfacePanel card = Card(276); Place(content, card, 24, 112);
-            Label report = TextLabel("Conferindo motor, rede e descoberta…", DesignTokens.Body, DesignTokens.Text, 700, 230); Place(card, report, 20, 20);
-            ActionButton refresh = Button("Verificar de novo", false, 190, delegate { ShowDiagnostics(); }); refresh.Enabled = false; Place(content, refresh, 24, 408);
-            Place(content, Button("Configurar firewall…", false, 220, ConfigureFirewall), 230, 408);
-            Place(content, TextLabel("O firewall aceita apenas rede Privada e sub-rede local. A configuração pede\npermissão de administrador. O aplicativo e o diagnóstico não precisam dela.\n\nSe o PC não aparecer: confira a mesma rede, o isolamento de clientes no Wi-Fi,\na descoberta Bonjour e se a VPN permite acesso à rede local.", DesignTokens.Body, DesignTokens.Muted, 750, 152), 24, 476);
-            int generation = diagnosticGeneration;
+            if (Owned || ActiveState == ReceiverState.Starting) { Stop(); return; }
+            if (checking) return;
+            if (preparedAt == DateTime.MinValue || preparationInvalidated || (DateTime.UtcNow < preparedAt || DateTime.UtcNow - preparedAt > TimeSpan.FromMinutes(5)))
+            { OpenPreparation(); return; }
+            checking = true; int capturedIntention = ++intention; UpdateSurface();
+            PreparationSelection captured = selection.Clone(); PreparationConfirmations consent = confirmations.Clone();
             BackgroundWorker worker = new BackgroundWorker();
-            worker.DoWork += delegate(object sender, DoWorkEventArgs args) { args.Result = DiagnosticService.Inspect(appDirectory); };
-            worker.RunWorkerCompleted += delegate(object sender, RunWorkerCompletedEventArgs args)
+            worker.DoWork += delegate(object s, DoWorkEventArgs args) { using (PreparationProbe inspector = new PreparationProbe(applicationDirectory)) args.Result = PreparationChecklist.Evaluate(captured, consent, inspector.Inspect(captured)); };
+            worker.RunWorkerCompleted += delegate(object s, RunWorkerCompletedEventArgs args)
             {
-                worker.Dispose();
-                if (disposed || generation != diagnosticGeneration || report.IsDisposed) return;
-                refresh.Enabled = true;
-                if (args.Error != null) { report.Text = "Não foi possível concluir a verificação. Tente novamente."; return; }
-                DiagnosticReport result = (DiagnosticReport)args.Result;
-                report.Text = "MOTOR AIRPLAY\n" + result.Runtime + "\n\nREDE LOCAL\n" + result.Network + "\n\nDESCOBERTA BONJOUR\n" + result.Bonjour;
+                worker.Dispose(); checking = false; if (disposed) return;
+                if (capturedIntention != intention || preparationInvalidated) { preparedAt = DateTime.MinValue; UpdateSurface(); guidance.Text = "A preparação mudou. Selecione o ambiente para verificar novamente."; return; }
+                if (args.Error != null || !((PreparationReport)args.Result).CanStart)
+                { preparedAt = DateTime.MinValue; UpdateSurface(); OpenPreparation(); return; }
+                PreparationReport report = (PreparationReport)args.Result; captured.AndroidSerial = report.SelectedAndroidSerial; selection = captured;
+                if (selection.Device == DeviceFamily.IOS) airplay.Start(settings.Clone()); else android.Start(settings.Clone(), selection.Clone(), consent);
+                UpdateSurface();
             };
             worker.RunWorkerAsync();
         }
-        private void ConfigureFirewall(object sender, EventArgs e)
+        private void InvalidatePreparation()
+        { intention++; preparationInvalidated = true; preparedAt = DateTime.MinValue; confirmations = new PreparationConfirmations(); preparationNotice = null; }
+        private void Stop() { InvalidatePreparation(); airplay.Stop(); android.Stop(); UpdateSurface(); }
+        private void StateChanged(object sender, ReceiverStateChangedEventArgs e)
         {
-            string script = Path.Combine(appDirectory, "scripts\\setup_firewall.ps1");
-            if (!File.Exists(script)) { Notify("Script de firewall ausente. Reinstale a partir de uma versão verificada."); return; }
-            if (MessageBox.Show(this, "Permitir que este receptor receba conexões de dispositivos da sub-rede local, apenas em redes marcadas como Privadas no Windows?", "Configurar firewall", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
-            try
-            {
-                string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
-                Process operation = new Process();
-                operation.StartInfo = new ProcessStartInfo(powershell, "-NoProfile -ExecutionPolicy RemoteSigned -File \"" + script + "\"") { UseShellExecute = true, Verb = "runas", WorkingDirectory = appDirectory };
-                operation.EnableRaisingEvents = true;
-                operation.Exited += delegate
-                {
-                    int exitCode = operation.ExitCode; operation.Dispose();
-                    if (disposed || !IsHandleCreated) return;
-                    try { BeginInvoke(new Action(delegate { Notify(exitCode == 0 ? "Regras de rede privada configuradas. Confira o Diagnóstico." : "A configuração do firewall falhou. Execute configurar_firewall.bat para ver os detalhes."); })); }
-                    catch (InvalidOperationException) { }
-                };
-                try { operation.Start(); } catch { operation.Dispose(); throw; }
-                Notify("Aguardando a configuração do firewall…");
-            }
-            catch (Win32Exception) { Notify("A configuração não foi iniciada. Você pode tentar novamente quando precisar."); }
+            if (disposed || !IsHandleCreated) return;
+            try { BeginInvoke(new Action(delegate { if (e.State == ReceiverState.Error || e.State == ReceiverState.Stopped) InvalidatePreparation(); UpdateSurface(); })); } catch (InvalidOperationException) { }
         }
-        private void ShowPreferences()
+        private void UpdateSurface()
         {
-            ClearPage();
-            Place(content, TextLabel("Do seu jeito.", DesignTokens.Heading, DesignTokens.Text, 700, 48), 24, 4);
-            Place(content, TextLabel("Preferências salvas somente neste usuário do Windows.", DesignTokens.Body, DesignTokens.Muted, 700, 32), 24, 60);
-            SurfacePanel card = Card(476); Place(content, card, 24, 108);
-            bool busy = receiver.HasOwnedProcess || receiver.State == ReceiverState.Starting;
-            Place(card, TextLabel("Nome que aparece no iPhone", DesignTokens.Step, DesignTokens.Text, 600, 28), 20, 20);
-            TextBox name = new TextBox { Text = settings.ReceiverName, MaxLength = 48, Width = 460, BackColor = DesignTokens.Raised, ForeColor = DesignTokens.Text, BorderStyle = BorderStyle.FixedSingle, AccessibleName = "Nome do receptor" }; Place(card, name, 20, 56);
-            Place(card, TextLabel("Use um nome de 1 a 48 caracteres. Evite dados pessoais.", DesignTokens.Small, DesignTokens.Muted, 660, 32), 20, 92);
-            CheckBox pin = Preference("Exigir código AirPlay de sessão ao conectar", settings.RequirePin); Place(card, pin, 20, 140);
-            CheckBox mute = Preference("Silenciar o áudio recebido", settings.Mute); Place(card, mute, 20, 184);
-            CheckBox minimize = Preference("Continuar na bandeja ao fechar a janela", settings.MinimizeToTray); Place(card, minimize, 20, 228);
-            CheckBox animation = Preference("Animar o radar ao abrir o aplicativo", settings.EnableAnimation); Place(card, animation, 20, 272);
-            Place(card, TextLabel("Desligar automaticamente após", DesignTokens.Body, DesignTokens.Text, 400, 28), 20, 336);
-            ComboBox limit = new ComboBox { Width = 220, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Limite de tempo da sessão" };
-            limit.Items.AddRange(new object[] { "Sem limite", "15 minutos", "30 minutos", "60 minutos" });
-            int[] values = { 0, 15, 30, 60 }; limit.SelectedIndex = Array.IndexOf(values, settings.SessionLimitMinutes); Place(card, limit, 20, 372);
-            Label feedback = TextLabel(busy ? "Pare o receptor para alterar as preferências." : "As alterações serão usadas na próxima sessão.", DesignTokens.Small, DesignTokens.Muted, 700, 32); Place(card, feedback, 20, 428);
-            name.Enabled = pin.Enabled = mute.Enabled = minimize.Enabled = animation.Enabled = limit.Enabled = !busy;
-            ActionButton save = Button("&Salvar preferências", true, 228, delegate
-            {
-                AppSettings updated = new AppSettings { ReceiverName = name.Text.Trim(), RequirePin = pin.Checked, Mute = mute.Checked, MinimizeToTray = minimize.Checked, EnableAnimation = animation.Checked, SessionLimitMinutes = values[limit.SelectedIndex] };
-                string error;
-                if (!updated.Validate(out error)) { feedback.Text = error; feedback.ForeColor = DesignTokens.Danger; name.Focus(); return; }
-                if (store.Save(updated)) { settings = updated; feedback.Text = "Preferências salvas."; feedback.ForeColor = DesignTokens.Success; }
-                else { feedback.Text = store.LastError; feedback.ForeColor = DesignTokens.Danger; }
-            });
-            save.Enabled = !busy; Place(content, save, 24, 604);
+            ReceiverState active = ActiveState; if (active == ReceiverState.Error && preparedAt != DateTime.MinValue) active = ReceiverState.Stopped; bool busy = Owned || active == ReceiverState.Starting;
+            environmentButton.Text = "Ambiente  ·  " + EnvironmentStore.Describe(selection); environmentButton.AccessibleName = environmentButton.Text;
+            environmentButton.Enabled = !checking && !busy;
+            startButton.Text = busy ? "Parar espelhamento" : checking ? "Verificando ambiente…" : "Começar a espelhar";
+            startButton.AccessibleName = startButton.Text; startButton.Enabled = !checking && (busy || (preparedAt != DateTime.MinValue && !preparationInvalidated));
+            state.Text = checking ? "Conferindo os requisitos do ambiente…" : active == ReceiverState.Running ? (selection.Device == DeviceFamily.IOS ? "Receptor AirPlay disponível" : "Janela Android iniciada") : active == ReceiverState.Starting ? "Preparando a conexão…" : active == ReceiverState.Error ? "O ambiente precisa de atenção" : preparedAt == DateTime.MinValue ? "Selecione o ambiente e conclua o checklist" : "Tudo pronto para começar";
+            state.ForeColor = active == ReceiverState.Error ? DesignTokens.Danger : active == ReceiverState.Running ? DesignTokens.Success : DesignTokens.Muted;
+            if (active == ReceiverState.Running)
+                guidance.Text = selection.Device == DeviceFamily.IOS ? "No iPhone: Central de Controle → Espelhar a Tela → " + settings.ReceiverName + (settings.RequirePin ? "\nCódigo de pareamento: " + airplay.SessionPin : "") : "O vídeo abre em outra janela. O Android permanece somente em visualização.";
+            else if (active == ReceiverState.Error) guidance.Text = selection.Device == DeviceFamily.IOS ? airplay.StatusMessage : android.StatusMessage;
+            else if (preparedAt == DateTime.MinValue) guidance.Text = "A preparação fica fora desta tela. Nada começa sem sua ação.";
+            else if (!checking && active == ReceiverState.Stopped) guidance.Text = preparationNotice ?? "Checklist concluído. A conexão é conferida novamente ao começar.";
+            if (tray != null) tray.Text = busy ? "LetMeSee · sessão ativa" : "LetMeSee · parado";
         }
-        private static CheckBox Preference(string text, bool value)
+        private void PowerChanged(object sender, PowerModeChangedEventArgs e)
         {
-            return new CheckBox { Text = text, Checked = value, Width = 670, Height = 36, ForeColor = DesignTokens.Text, AccessibleName = text };
+            if (disposed || !IsHandleCreated || (e.Mode != PowerModes.Suspend && e.Mode != PowerModes.Resume)) return;
+            try { BeginInvoke(new Action(delegate { InvalidatePreparation(); if (e.Mode == PowerModes.Suspend) Stop(); UpdateSurface(); })); } catch (InvalidOperationException) { }
+        }
+        private void NetworkAvailabilityChanged(object sender, NetworkAvailabilityEventArgs e) { NetworkChanged(sender, EventArgs.Empty); }
+        private void NetworkChanged(object sender, EventArgs e)
+        {
+            if (disposed || !IsHandleCreated || selection.Method == MirrorMethod.AndroidUsb) return;
+            try { BeginInvoke(new Action(delegate { Stop(); guidance.Text = "A rede mudou. Selecione o ambiente para conferir a conexão novamente."; })); } catch (InvalidOperationException) { }
         }
         private void ClosingRequested(object sender, FormClosingEventArgs e)
         {
             if (!forceClose && settings.MinimizeToTray && e.CloseReason == CloseReason.UserClosing)
-            {
-                e.Cancel = true; Hide(); tray.ShowBalloonTip(2500, "LetMeSee", "O aplicativo continua na bandeja. Use Sair para encerrá-lo.", ToolTipIcon.Info); return;
-            }
-            receiver.Stop();
-            if (receiver.HasOwnedProcess || receiver.State == ReceiverState.Starting)
-            { e.Cancel = true; Show(); Notify("Não foi possível parar o motor. Tente novamente antes de sair."); }
+            { e.Cancel = true; Hide(); tray.ShowBalloonTip(2000, "LetMeSee", "Use Sair no ícone da bandeja para encerrar.", ToolTipIcon.Info); return; }
+            Stop();
+            if (Owned) { e.Cancel = true; Show(); guidance.Text = "Não foi possível confirmar o encerramento. Tente parar novamente."; }
         }
         protected override void Dispose(bool disposing)
         {
             if (disposing && !disposed)
             {
-                disposed = true; receiver.StateChanged -= ReceiverChanged; receiver.Dispose(); clock.Dispose(); tips.Dispose();
-                if (tray != null) { tray.Visible = false; tray.Dispose(); }
-                if (trayMenu != null) trayMenu.Dispose();
+                disposed = true; SystemEvents.PowerModeChanged -= PowerChanged;
+                NetworkChange.NetworkAddressChanged -= NetworkChanged; NetworkChange.NetworkAvailabilityChanged -= NetworkAvailabilityChanged;
+                airplay.StateChanged -= StateChanged; android.StateChanged -= StateChanged;
+                airplay.Dispose(); android.Dispose();
+                if (tray != null) { tray.Visible = false; tray.Dispose(); } if (trayMenu != null) trayMenu.Dispose();
             }
             base.Dispose(disposing);
         }

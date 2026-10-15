@@ -1,57 +1,67 @@
-# Como testar
+# Como testar · preparação e tela de duas ações
 
-## Neste Mac: prévia visual e verificações portáveis
-
-Abra `docs/design/preview.html` no navegador. A prévia também está servida nesta sessão em `http://127.0.0.1:8765/preview.html`. Ela não executa AirPlay, não consulta a rede real, não configura firewall e não persiste preferências em disco.
+## Verificações sem aparelho
 
 ```sh
+node --test tests/preview-workflow.test.js
 python3 tests/check-design.py
+zsh apps/macos/test.sh
+zsh apps/macos/build.sh
 ```
 
-Na sessão de implementação, os seguintes harnesses temporários foram executados, sem instalar SDK ou dependências do produto:
-
-```sh
-/tmp/letmesee-powershell/runtime/pwsh -NoProfile -File tests/dependency_security.tests.ps1
-/tmp/letmesee-powershell/runtime/pwsh -NoLogo -NoProfile -File /tmp/letmesee-core-qa.ps1
-/tmp/letmesee-powershell/runtime/pwsh -NoProfile -File /tmp/compile-letmesee.ps1
-```
-
-Resultados: 16 casos PS, 7 grupos core e compilação de todos os arquivos C#5 para .NET Framework 4.8 passaram. Os harnesses `/tmp` dependem das ferramentas temporárias desta sessão. A execução abaixo no Windows é o caminho mantido pelo projeto e pelo CI.
-
-## Windows 10/11 x64: build e testes obrigatórios
-
-Pré-requisitos: .NET Framework 4.8 e PowerShell 5.1. Faça o checkout da branch de implementação, em uma pasta sem runtime antigo não verificado.
+No Windows 10/11 x64 com .NET Framework 4.8 e PowerShell 5.1:
 
 ```powershell
 .\build_ui.bat
 powershell -NoProfile -File .\tests\run-core-tests.ps1
+powershell -NoProfile -File .\tests\run-preparation-tests.ps1
 powershell -NoProfile -File .\tests\dependency_security.tests.ps1
+powershell -NoProfile -File .\tests\android-package.tests.ps1
 ```
 
-Esperado: compilação sem warnings, 9 grupos core sem falhas (incluindo testes Win32 de argumentos e término de descendentes) e 16 casos PS sem falhas. O teste de subprocessos usa um executável de teste local sem rede, não o UxPlay real.
+Esperado no Windows: 9 grupos core, 16 grupos de preparação (incluindo fixture de processos Windows), 16 casos de pacotes/rollback e 4 verificações do pacote Android. Os testes usam arquivos/processos fictícios locais; não precisam de telefone ou de um UxPlay real.
 
-## Runtime e aplicativo
+No Mac desta implementação, passaram os 7 grupos core portáveis e 15 de preparação; os grupos Win32 ficaram SKIP. A compilação C#5 foi conferida com Roslyn e referências oficiais .NET Framework 4.8, x64 e warnings como erros. Passaram 57 verificações do domínio Swift, a suíte de infraestrutura e o build SwiftUI arm64. Isso não é execução do instalador Windows nem prova de transmissão física.
 
-```powershell
-powershell -NoProfile -File .\scripts\download_deps.ps1
-.\iniciar.bat
+## Prévia interativa
+
+Abra `docs/design/preview.html` por um servidor local que sirva também `workflow.js`:
+
+```sh
+python3 -m http.server 8765 --bind 127.0.0.1 --directory docs/design
 ```
 
-O download é explícito, fixa o hash e não executa Bonjour. Não execute o download portátil elevado. Esperado: `bin/runtime-files.sha256` criado e app aberto **desligado**, nome `LetMeSee`, PIN ativado e bandeja ao fechar desativada.
+Na prévia, os controles de laboratório são apenas simulação. Eles não existem na tela principal do produto e não acessam aparelhos reais.
 
-1. Em Diagnóstico, verificar motor, interfaces IPv4 e Bonjour. Motor ausente/alterado deve mostrar uma ação útil, sem download automático. Ao iniciar com DLL alterada, o processo não pode ser criado.
-2. Em Preferências, salvar um nome de 48 caracteres, mute e limite; reabrir o app e conferir persistência. Nome vazio, controles, aspas, barra invertida ou início com hífen devem ser recusados. Não salvar PIN.
-3. Iniciar e parar rapidamente, inclusive durante a verificação de arquivos; não deixar processos órfãos nem um callback antigo desligar uma sessão nova.
-4. Iniciar, tentar abrir segunda instância, fechar, verificar o término do UxPlay e descendentes. Ativar opção de bandeja: fechar deve manter o ícone; Sair deve encerrar.
-5. Conferir teclado, foco, textos longos e DPI 100/125/150/200%. Ativar alto contraste antes de abrir. Desativar animações no Windows: o radar deve aparecer estático. Testar Narrator; não presumir conformidade a partir de uma captura.
+1. Sistema novo: marque as confirmações. Concluir deve permanecer bloqueado enquanto motor/dispositivo estiverem ausentes.
+2. Sistema configurado: confirme os cuidados e conclua. A tela seguinte deve mostrar somente Ambiente e Começar a espelhar.
+3. Android sem autorização: confirmar RSA na prévia não pode sobrepor o resultado automático não autorizado.
+4. Vários Androids: nenhum deve ser escolhido silenciosamente. Confirme A, troque para B; autorização/privacidade precisam ser confirmadas novamente.
+5. Troque host, aparelho, conexão ou cenário: evidências e confirmações devem ser invalidadas. Modo técnico só muda explicação.
+6. iPhone + macOS + cabo: após começar, a orientação deve pedir a fonte no QuickTime e mostrar Concluir orientação. Não afirmar conexão ou desligamento do serviço Apple.
+7. Motor alterado, permissão negada, porta ocupada e falta de rede: mostrar a causa aplicável; USB pode funcionar sem rede.
+8. Preparação vencida/suspensão/erro: não reiniciar automaticamente. O módulo tem testes de tempo negativo, cinco minutos e nova observação antes de Start.
 
-## Firewall e instalador (máquina de teste)
+As capturas em `docs/design/checklist-preview.png` e `preview.png` são do navegador, não screenshots de WinForms/SwiftUI.
 
-Empacotamento: o workflow `Verify and build LetMeSee for Windows` prepara runtime/compilador por hash e gera instalador, ZIP e SHA256SUMS. Não publica release. Também é possível executar o script Inno Setup após preparar os arquivos.
+## Windows: sistema limpo
 
-1. Instalar sem marcar acesso de rede. Confirmar ausência de regras próprias e remoção das regras amplas da versão anterior; app não deve abrir elevado.
-2. Solicitar Configurar firewall na UI. Cancelar UAC não deve declarar sucesso. Aceitar UAC deve criar somente regras de entrada `Private`, `LocalSubnet`, vinculadas ao executável/portas.
-3. Conferir com PowerShell administrativo:
+1. Abrir o app: o checklist deve aparecer; a tela simples não pode iniciar processo sem sua conclusão.
+2. Android: Preparar Android deve pedir uma ação explícita, baixar o scrcpy oficial fixado, conferir hash e gerar inventário em `%LOCALAPPDATA%\LetMeSee\engines\android`. Nenhum adb/scrcpy deve rodar durante o download.
+3. iOS: Preparar AirPlay usa o runtime fixado. Em Program Files ele deve vir do instalador; corrupção/ausência deve orientar reinstalação se a pasta não for gravável.
+4. Descoberta: Configurar descoberta pede consentimento e UAC. MSI sem assinatura Apple válida, ausente ou alterado deve ser bloqueado. Instalador Apple completo deixa aceite/cancelamento com o usuário; reinicialização solicitada não é tratada como pronto.
+5. Firewall: Cancelar UAC não deve aprovar o checklist. A configuração cria somente regras por programa/portas, Private e LocalSubnet. Não altera categoria da rede ou política corporativa.
+6. Sem administrador: continuar com requisitos já instalados ou usar Android USB quando viável; não contornar restrições de instalação, driver ou MDM.
+
+## Windows: sistema configurado
+
+1. Nenhum download ou MSI automático. Conferir runtime, portas, rede e serviço existentes.
+2. Porta ocupada, Bonjour ausente/parado e firewall conhecido inválido bloqueiam. Evidência indisponível exige revisão manual explícita e nunca aparece como verificação automática concluída.
+3. Rede Pública ou de domínio não deve ser apresentada como AirPlay liberado por regras Private. Usar rede Privada autorizada ou consultar TI. Wi-Fi convidado/VPN/isolamento podem falhar mesmo na mesma rede.
+4. Fechar/parar durante a verificação não pode iniciar depois. Trocar aparelho não pode reaproveitar consentimentos; um serial que desapareceu não pode ser substituído por outro automaticamente.
+5. Repetir configuração e testar upgrade/desinstalação. Confirmar remoção das regras próprias legadas amplas, sem remover regras de outros aplicativos.
+
+Para conferir regras com uma conta administrativa:
 
 ```powershell
 Get-NetFirewallRule -Group LetMeSee | Format-Table Name,Enabled,Profile,Direction,Action
@@ -59,18 +69,26 @@ Get-NetFirewallRule -Group LetMeSee | Get-NetFirewallAddressFilter
 Get-NetFirewallRule -Group LetMeSee | Get-NetFirewallApplicationFilter
 ```
 
-4. Repetir configuração; regras não podem se multiplicar. A porta TCP 7001 precisa estar incluída, além de 7000/7100, conforme o modo legado do UxPlay.
-5. Testar upgrade da versão anterior com regras amplas, instalação com task de rede desmarcada e desinstalação; nenhuma regra antiga do próprio LetMeSee deve permanecer. Não remover regras de outros aplicativos.
-6. Confirmar que Bonjour MSI não foi iniciado e que cancelamentos/falhas são visíveis. Desinstalar deve remover regras e arquivos instalados, preservando preferências locais por usuário.
+## Android físico · Windows e Mac
 
-## iPhone/iPad real
+- Cabo de dados, outra porta, Android desbloqueado; estados sem dispositivo/RSA negado/offline e drivers OEM quando necessários.
+- Dois aparelhos e emulador simultâneo: escolher o aparelho físico correto; não escolher o primeiro e não trocar alvo após desconexão.
+- Android 11+ sem fio: pareamento anterior, descoberta no servidor privado e rede permitida. Se não descoberto, orientar USB; não abrir 5555.
+- Iniciar com arquivo alterado, servidor Android alterado e overrides de ambiente: bloquear ou usar somente caminhos aprovados.
+- Android Studio/ADB de terceiros em paralelo: LetMeSee não deve matar o servidor global. Se houver disputa por USB, mostrar diagnóstico em vez de assumir posse.
+- Parar, fechar a janela, desconectar, suspender e chegar ao limite de tempo: encerrar somente processos próprios e invalidar preparação.
+- Vídeo, áudio por versão/dispositivo, app protegido/DRM e revogação de depuração após uso em computador compartilhado.
 
-1. Na mesma rede privada, iniciar o receptor e localizar nome sem sufixo de usuário/hostname.
-2. Tentar código incorreto: acesso recusado. Usar o código mostrado: espelhar tela e testar áudio. Parar/reiniciar deve gerar novo código; a confirmação de comportamento depende do dispositivo/protocolo.
-3. Ativar mute e reiniciar sessão; vídeo deve continuar, áudio ficar silenciado. Testar limite de 15 minutos no receptor (o teste unitário não substitui essa espera real).
-4. Ao parar, o serviço deve deixar de aceitar novos espelhamentos. Conferir comportamento em rede Pública sem alterar categoria nem desativar firewall.
-5. Conferir que `Pronto para receber` não vira indicação fictícia de iPhone conectado e que a UI orienta que o vídeo abre em outra janela.
+## iPhone/iPad físico
 
-## Estado da evidência
+Windows: mesma rede privada, descoberta Bonjour, receptor com nome configurado, código de pareamento, áudio, parada e nova execução. Tentar cliente já pareado após Stop/Start; o teste físico determina quando o protocolo pede código. Processo ativo não pode ser rotulado como cliente conectado.
 
-A compilação cruzada, core portátil, testes PS portáteis, contraste e prévia foram executados. Os cenários Windows, instalador, UAC, firewall real, APIs Win32 de processo e recepção física **ainda não foram executados**. Registre ambiente, comando, esperado e observado ao completá-los. Não distribuir como versão validada até esses gates e o inventário de terceiros serem concluídos.
+Mac/AirPlay: confirmar compatibilidade, Receptor ativado e acesso permitido. Iniciar a sessão no iPhone e encerrá-la pelo sistema; LetMeSee não deve simular um PIN próprio ou dizer que desligou o receptor.
+
+Mac/cabo: cabo de dados, confiança no aparelho, QuickTime → Nova Gravação de Filme → selecionar iPhone. Confirmar que não grava automaticamente; parar na janela QuickTime.
+
+## Acessibilidade e ambiente
+
+Testar teclado/foco/Narrator/VoiceOver, janela pequena, nome longo, DPI 100/125/150/200%, alto contraste e movimento reduzido. A captura de navegador prova apenas a prévia. O controle da janela macOS pela ferramenta CUA não foi autorizado nesta sessão; não houve tentativa alternativa de contornar essa restrição.
+
+A matriz completa está em `docs/qa/SCENARIOS.md`. Os casos físicos, Win32, UAC, instalador, firewall real, Intel, áudio e leitores de tela continuam pendentes. Não distribuir antes dos gates e do inventário de terceiros em `THIRD_PARTY.md`.

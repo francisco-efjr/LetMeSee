@@ -18,3 +18,9 @@ O ZIP legado não contém `LICENSE`, `COPYING` ou um inventário completo de lic
 A paleta é inspirada na [referência de Pulse fornecida pelo usuário](https://steamcommunity.com/sharedfiles/filedetails/?id=1408618718). A textura e o radar da interface foram desenhados em código; a arte GIF do Steam e o anexo comercial não são distribuídos no produto. O ícone anterior do projeto foi preservado.
 
 O [Mo baile](https://github.com/francisco-efjr/mo-baile) e o [Brain of Agent](https://github.com/francisco-efjr/brain-of-agent) serviram de referência de estrutura, tokens e processo. Não foram incorporados como bibliotecas executadas pelo app.
+
+## Android e aplicativo macOS
+
+O adaptador Windows usa o [scrcpy 5.0.1 oficial](https://github.com/Genymobile/scrcpy/releases/tag/v5.0.1), consultado em 2026-10-15. O ZIP x64 e o hash publicado pelo upstream/API foram conferidos com o arquivo baixado: `b12a2c4ee8be317422451fc7dcf8ee20a71b5ea7ef9ad73ddd825a25316227a5`. Os 16 arquivos extraídos são inventariados antes do uso, incluindo adb, DLLs, licença e componente de servidor. A versão/origem está em `config/android-runtime.json`; não é um inventário de vulnerabilidades ou de licenças de todas as bibliotecas.
+
+No macOS, as ferramentas Android não estão incluídas no app. O usuário seleciona/aprova sua instalação confiável; o app recalcula identidades antes de iniciar. SwiftUI/AppKit/CryptoKit vêm do SDK Apple já instalado para desenvolvimento. A prévia QuickTime e o Receptor AirPlay são recursos do sistema, não componentes redistribuídos pelo LetMeSee.

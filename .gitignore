@@ -18,3 +18,7 @@ dist/
 .runtime-backup-*/
 tests/.security-tests-*/
 __pycache__/
+
+# Motores Android opcionais ficam separados do runtime AirPlay
+engines/
+tests/.android-package-tests-*/

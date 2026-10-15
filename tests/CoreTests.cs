@@ -69,7 +69,7 @@ internal static class CoreTests
     {
         AppSettings settings = new AppSettings { ReceiverName = "Sala & Pulse | 01" };
         string arguments = UxPlayArguments.Build(settings);
-        Assert(arguments == "-n \"Sala & Pulse | 01\" -nh -p -vs d3d11videosink", "exact safe arguments; no hostname suffix");
+        Assert(arguments == "-n \"Sala & Pulse | 01\" -nh -m -p -vs d3d11videosink", "exact safe arguments; no hostname suffix");
         settings.Mute = true;
         Assert(UxPlayArguments.Build(settings).EndsWith(" -as 0", StringComparison.Ordinal), "documented audio mute option");
         settings.ReceiverName = "-d";

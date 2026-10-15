@@ -7,7 +7,7 @@ namespace LetMeSee
 {
     internal class SurfacePanel : Panel
     {
-        public bool Paper;
+        public bool Paper { get; set; }
         public SurfacePanel() { DoubleBuffered = true; BackColor = DesignTokens.Surface; Padding = new Padding(20); }
         private GraphicsPath Outline()
         {

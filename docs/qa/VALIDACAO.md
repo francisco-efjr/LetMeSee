@@ -1,31 +1,42 @@
-# Evidência de validação · 2026-10-15
+# Evidência de validação · incremento 1.2.0 · 2026-10-15
 
-Ambiente: macOS arm64, workspace local. Não havia .NET SDK/Framework, Mono ou PowerShell no PATH. Um PowerShell oficial Microsoft 7.6.7 foi obtido apenas em `/tmp`, sem instalação no sistema. SHA-256 do arquivo de ferramenta conferido: `50dde99bb066adacbb9a748182d09eb9beff25119dc3b12e85c84b6b6b1c5da9`.
+Ambiente de execução: macOS arm64 com Xcode 26.2/Swift 6.2.3 e Node. PowerShell oficial 7.6.7 foi usado apenas em `/tmp`, sem instalação de SDK ou dependência do produto. O build Windows foi conferido por compilação cruzada com referências oficiais .NET Framework 4.8.
 
-## Executado
-
-| Verificação | Resultado observado | Limite |
+| Verificação executada | Resultado observado | Limite |
 | --- | --- | --- |
-| Roslyn + referências Microsoft .NET Framework 4.8 1.0.3 | `PASS: GUI compiled with C#5, .NET Framework 4.8 reference assemblies, x64, warnings as errors; 7 source files` | Compilação cruzada, não executa a UI nem embute recursos via build_ui.bat |
-| Core via Roslyn/.NET portátil | `Passed: 7; Failed: 0`, exit 0 | Parsing Win32 e 2 grupos de processo condicionais Windows não executados |
-| `tests/dependency_security.tests.ps1` | `Security checks passed: 16`, exit 0 | Executado em PS7/macOS; PS5.1/Windows ainda pendente |
-| Pacote runtime oficial | SHA-256 conferido; validação ZIP e manifesto: 608 arquivos incluindo manifesto | Nenhum binário do pacote foi executado |
-| `python3 tests/check-design.py` | `PASS: 8 text contrast pairs >= 4.5:1; preview colors match native tokens` | Tema escuro e pares de texto listados, sem alegação de conformidade completa |
-| JavaScript inline da prévia | `node --check`: exit 0 | Somente sintaxe |
-| Navegador local | Navegação 3 seções; ligar/parar demonstração; alterar nome; recusar `-d`; verificar diagnóstico ilustrativo; captura final | Prévia HTML não executa receiver |
-| `git diff --check` | exit 0 | Higiene de diff |
+| Produção C#/C#5/net48/x64/warnings como erros | 14 arquivos compilaram | Não executa WinForms/Win32 nem o linker do csc Windows |
+| Core portátil | 7 grupos passaram, 0 falharam | 2 grupos Windows e parsing Win32 pendentes |
+| Matriz de preparação C# | 15 grupos passaram, 0 falharam | Fixture privada ADB/Job Object exige Windows, ficou SKIP |
+| Segurança PowerShell | 16 casos passaram | PS7/macOS; PS5.1/Windows pendente |
+| Pacote Android | 4 verificações passaram | Arquivos sintéticos, sem executar motor |
+| Pacote oficial scrcpy 5.0.1 | SHA-256 publicado/API/arquivo iguais; 16 arquivos inventariados | Nenhum EXE/DLL/MSI do pacote executado |
+| Domínio Swift | 57 verificações passaram | Fixtures puras, sem celular |
+| Infraestrutura Swift | Hash/aprovação/arquivo/symlink/ambiente/argumentos literais/timeout passaram | Não iniciou scrcpy real ou aprovou ferramentas do usuário |
+| App SwiftUI | Build arm64/macOS 13+ passou, versão 1.2.0/build12 | Sem assinatura de distribuição ou notarização |
+| Domínio da prévia | 20 testes Node passaram, incluindo matriz de 64 combinações simuladas | Simulação não é teste físico |
+| Contraste | 8 pares de texto ≥4,5:1 e cores alinhadas | Não é auditoria completa de acessibilidade |
+| Navegador CUA | Confirmar não sobrepõe motor ausente; configuração pronta conclui; tela simples tem exatamente 2 controles; troca A→B limpa consentimentos; iPhone/macOS/cabo orienta QuickTime sem alegar sessão | Somente demonstração HTML |
+| Higiene | `git diff --check` passou | Não substitui validação funcional |
 
-## Bugs encontrados pela execução e corrigidos
+Comandos mantidos pelo projeto estão em `COMO-TESTAR.md`. Harnesses temporários usados nesta sessão: `/tmp/compile-letmesee.ps1`, `/tmp/letmesee-core-qa.ps1`, `/tmp/letmesee-preparation-qa.ps1` e `/tmp/letmesee-android-package-verify.ps1`.
 
-1. Primeira compilação da UI: API `SystemInformation.IsClientAreaAnimationEnabled` ausente no .NET Framework 4.8. Corrigida para consulta nativa `SPI_GETCLIENTAREAANIMATION`. Nova compilação passou.
-2. Primeiro teste do core: XML com mais de 16 KiB lançava `InvalidDataException` fora do catch. O fallback seguro foi corrigido, e os testes de arquivo excessivo, campos obrigatórios e versão desconhecida passaram.
+## Bugs e lacunas encontrados e corrigidos
+
+- Cancelamento pela bandeja durante preflight podia ser seguido por início tardio: intenção monotônica invalida o callback.
+- Consulta Android e espelhamento podiam manter dois servidores ADB privados: probes são encerrados antes do adaptador assumir a sessão.
+- Trocar A por B mantinha consentimentos: ambas as UIs limpam o aceite contextual; regressão Swift adicionada.
+- Perfil DomainAuthenticated não corresponde a regra Private: AirPlay é bloqueado com orientação de política, sem alterar a categoria da rede.
+- PIN UxPlay não é garantia de prompt a cada reconexão: identidade randomizada e documentação de pareamento corrigida.
+- Confirmação/contexto antigo após rede/suspensão/relógio regressivo: invalidação e nova verificação antes do início.
+- Prévia cortava botões em janela baixa e chip de simulação tinha texto escuro: regra de altura ajustada e par de cores corrigido. Captura final mostra as duas ações no viewport.
+- Testes externos do módulo da prévia não estavam no CI: comandos de sintaxe e teste Node foram incluídos.
 
 ## Revisão independente
 
-Outro agente fez revisão somente leitura do core, interface, scripts, instalador, CI e testes. Encontrou problemas de integração (retorno de Save, Timer ambíguo, falha ao parar, callback antigo), rollback, feedback de firewall e regras legadas. As correções foram verificadas por nova leitura e testes disponíveis. Essa revisão é opinião de modelo independente da autoria, não auditoria externa de segurança.
+Outro agente revisou somente leitura métodos, C#/Swift, scripts e integração. Os achados foram encaminhados aos autores e corrigidos. Trata-se de revisão de modelo separada da autoria, não certificação externa.
 
-## Não executado
+## Não executado / acesso não concedido
 
-`build_ui.bat` pelo compilador do Windows; execução WinForms; Windows Job Object e parsing nativo; Windows PowerShell 5.1; Inno Setup, UAC, firewall real, upgrade/desinstalação; AirPlay físico, áudio e leitor de tela/DPI. O pipeline foi preparado, mas não foi acionado nesta sessão. Não há release publicada por este trabalho.
+A ferramenta de controle do aplicativo macOS retornou que o uso de LetMeSee não foi aprovado. Não repetimos a tentativa nem usamos outra tecnologia de automação para contornar a restrição. O app nativo foi compilado/testado no nível disponível; sua janela e os fluxos físicos permanecem pendentes.
 
-Roteiro mantido: `COMO-TESTAR.md`. Gates de distribuição: teste Windows/dispositivo e inventário completo de terceiros conforme `THIRD_PARTY.md`.
+Também não executados: build_ui.bat no Windows, APIs Win32 de processo/quoting, PowerShell 5.1, Inno Setup/UAC/Bonjour/firewall real, upgrade/desinstalação, AirPlay/QuickTime/Android físicos, áudio, Intel, DPI e leitores de tela. CI preparado, ainda sem push ou execução remota. Nenhum release foi publicado.

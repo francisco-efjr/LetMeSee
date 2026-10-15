@@ -40,9 +40,20 @@ jobs:
           & .\tests\run-core-tests.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
 
+      - name: Test preparation matrix and Android package boundaries
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\tests\run-preparation-tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Preparation tests failed.' }
+          & .\tests\android-package.tests.ps1
+
       - name: Check design token contrast and preview JavaScript syntax
         run: |
           $ErrorActionPreference = 'Stop'
+          node --check docs/design/workflow.js
+          if ($LASTEXITCODE -ne 0) { throw 'Preview workflow syntax failed.' }
+          node --test tests/preview-workflow.test.js
+          if ($LASTEXITCODE -ne 0) { throw 'Preview workflow tests failed.' }
           python tests/check-design.py
           if ($LASTEXITCODE -ne 0) { throw 'Design checks failed.' }
           $preview = [IO.File]::ReadAllText((Join-Path $PWD 'docs\design\preview.html'))

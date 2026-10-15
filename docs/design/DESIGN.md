@@ -1,6 +1,18 @@
 # LetMeSee · Contrato de design
 
-Produto: receptor AirPlay para Windows. Tarefa principal: iniciar deliberadamente uma sessão, localizar o nome no iPhone e encerrar com clareza.
+Produto: espelhamento de Android, iPhone e iPad no Windows ou macOS. Tarefa principal: preparar o ambiente, iniciar deliberadamente o método escolhido e entender onde encerrar.
+
+## Contrato do fluxo
+
+1. Abrir **Preparar seu ambiente** antes da primeira sessão. A pessoa escolhe aparelho, conexão e nível de explicação. O sistema operacional vem do aplicativo nativo.
+2. Mostrar somente os requisitos do método. Resultados automáticos são somente leitura; confirmações sobre celular/rede/privacidade exigem ação da pessoa. Confirmar não substitui runtime íntegro, autorização Android ou outra condição local bloqueante.
+3. Liberar **Concluir preparação** quando os requisitos estiverem satisfeitos. Não persistir o checklist concluído, PIN ou serial escolhido. As preferências de ambiente podem ser lembradas.
+4. Mostrar exatamente duas ações na tela principal: **Ambiente** e **Começar a espelhar**. Informações de estado e instruções são passivas. A ação principal passa a **Parar espelhamento** para processos próprios ou **Concluir orientação** nas rotas Apple do Mac.
+5. Revalidar antes de iniciar. Troca de contexto/aparelho, parada/erro, suspensão, mudança de rede aplicável ou prazo de cinco minutos exige preparação renovada. Durante uma sessão, Ambiente fica indisponível.
+
+O nível guiado muda a explicação; não remove requisitos. Dispositivo ausente, não autorizado, offline ou ambíguo recebe orientação contextual. A seleção de um novo aparelho limpa as confirmações anteriores. Não escolher outro aparelho silenciosamente quando o selecionado desaparecer.
+
+Diagnóstico, preferências e ações explícitas de preparação vivem no checklist, fora da tela principal. Downloads, UAC, instalador Bonjour e aprovação de ferramentas nunca acontecem apenas por abrir o aplicativo.
 
 ## Origem e adaptação
 
@@ -11,7 +23,7 @@ Produto: receptor AirPlay para Windows. Tarefa principal: iniciar deliberadament
 
 ## Tokens
 
-Fonte de verdade nativa: `src/UI/DesignTokens.cs`. A documentação visual em `preview.html` espelha a paleta; não substitui o renderer WinForms.
+Fonte de verdade Windows: `src/UI/DesignTokens.cs`; adaptação SwiftUI: `Palette` em `apps/macos/Sources/LetMeSeeApp.swift`. A documentação visual em `preview.html` espelha a paleta; não substitui os renderers nativos.
 
 | Papel | Token C# | Valor escuro |
 | --- | --- | --- |
@@ -24,21 +36,23 @@ Fonte de verdade nativa: `src/UI/DesignTokens.cs`. A documentação visual em `p
 | Estado positivo | Success | #AAD399 |
 | Erro | Danger | #FFA696 |
 
-Fontes: Segoe UI para interface, Consolas para rótulos técnicos. Grade de 4; raio de cartão 12; altura de controle de ação 40, ação principal 48. Textura só no hero. Conteúdo e campos são opacos.
+Windows usa Segoe UI para interface e Consolas para rótulos técnicos; macOS usa fontes e controles do sistema. Grade de 4; raio de cartão 12; altura de controle de ação 40, ação principal 48. A textura é decorativa e discreta; campos e resultados do checklist ficam em superfícies opacas.
 
-No alto contraste os tokens usam SystemColors; não há textura nem animação. A animação de abertura dura 1,2 s, não fica em loop e observa a preferência nativa `SPI_GETCLIENTAREAANIMATION`, além da preferência local. Mudanças de alto contraste precisam de reinício.
+No Windows em alto contraste, os tokens usam SystemColors; não há textura nem animação. O radar de abertura dura 1,2 s, não fica em loop e observa a preferência nativa `SPI_GETCLIENTAREAANIMATION`, além da preferência local. Mudanças de alto contraste precisam de reinício. O símbolo SwiftUI é estático. Suporte completo a ajustes de acessibilidade do macOS permanece no roteiro de validação.
 
 ## Componentes e estados
 
 - `SurfacePanel`: agrupa conteúdo com raio e borda discreta. A variante Paper é exclusiva do hero, sem campos de formulário sobre textura.
 - `ActionButton`: verbo + nome acessível, foco visível, navegação por Tab; ações nativas mantêm atalhos por `&`.
-- `SonarPanel`: ilustração sem função de status. O indicador textual é a fonte de estado.
-- Espelhamento: parado, verificando, processo ativo e erro. Nunca exibir “conectado” com base só no processo.
-- Preferências: habilitadas apenas com receptor parado; salvar confirma apenas após sucesso da escrita.
-- Diagnóstico: carregando e resultado/erro, sem executar reparos ou solicitar UAC na leitura.
+- `SonarPanel` / `PulseMark`: ilustração sem função de status. O indicador textual é a fonte de estado.
+- Checklist: pronto, ação necessária, bloqueio e aviso, com texto e símbolo além de cor. Rolagem preserva o acesso às ações em janelas baixas.
+- Espelhamento: preparação necessária, conferido, verificando, processo ativo/orientação e erro. Nunca exibir “conectado” com base só no processo.
+- Apple no Mac: indicar que AirPlay e QuickTime pertencem ao sistema; concluir a orientação não encerra essas sessões. Mostrar onde a pessoa pode pará-las.
+- Preferências: habilitadas apenas sem sessão ativa; salvar confirma apenas após sucesso da escrita.
+- Diagnóstico: carregando e resultado/erro, sem executar reparos ou solicitar UAC na leitura. Falhas preservam orientação de recuperação, sem aceitar o requisito automaticamente.
 
 ## Prévia e limites
 
-`preview.html` funciona localmente sem fontes, bibliotecas ou serviços externos. Os endereços e o estado ativo são marcados como ilustrativos. Preferências da prévia vivem só na memória da página; o app salva XML. A captura `preview.png` documenta o navegador, não o aplicativo Windows.
+`preview.html` e `workflow.js` funcionam localmente sem fontes, bibliotecas ou serviços externos. O modo **Demonstração** fica visível. A prévia simula cenários e não detecta aparelhos, instala componentes ou inicia espelhamento. Preferências vivem só na memória da página; os apps usam seus armazenamentos locais. `checklist-preview.png` e `preview.png` documentam checklist e tela principal no navegador.
 
-A leitura por Narrator, ordem de foco, corte de texto a 125/150/200% DPI e renderização nativa permanecem pendentes no Windows. O contraste das combinações de texto está registrado em `docs/qa/contrast.json`.
+A leitura por Narrator/VoiceOver, ordem de foco, corte de texto a 125/150/200% DPI e renderização nativa permanecem pendentes. O contraste de oito combinações de texto Windows/prévia está registrado em `docs/qa/contrast.json`. Isso não comprova acessibilidade completa.

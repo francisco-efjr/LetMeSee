@@ -157,7 +157,7 @@ function Write-RuntimeManifest {
 }
 
 function Assert-RuntimeIntegrity {
-    param([Parameter(Mandatory = $true)][string]$RuntimeDirectory)
+    param([Parameter(Mandatory = $true)][string]$RuntimeDirectory, [string[]]$RequiredFiles = @('uxplay.exe'))
     $manifest = Join-Path $RuntimeDirectory 'runtime-files.sha256'
     if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'Runtime integrity manifest is missing. Run scripts/download_deps.ps1 explicitly.' }
     Assert-NoReparsePath -Path $manifest
@@ -169,7 +169,10 @@ function Assert-RuntimeIntegrity {
         if ($relative -eq 'runtime-files.sha256' -or $entries.ContainsKey($relative)) { throw 'Duplicate or self-referencing runtime manifest entry.' }
         $entries.Add($relative, $hash)
     }
-    if (-not $entries.ContainsKey('uxplay.exe')) { throw 'Runtime manifest does not include uxplay.exe.' }
+    foreach ($required in $RequiredFiles) {
+        $safeRequired = ConvertTo-SafeRelativePath -Path $required
+        if (-not $entries.ContainsKey($safeRequired)) { throw ('Runtime manifest does not include ' + $safeRequired + '.') }
+    }
     $files = @(Get-RuntimeFiles -RuntimeDirectory $RuntimeDirectory)
     $prefix = [IO.Path]::GetFullPath($RuntimeDirectory).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     foreach ($file in $files) {

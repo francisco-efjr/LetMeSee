@@ -155,7 +155,7 @@ namespace LetMeSee
             if (settings == null) throw new ArgumentNullException("settings");
             string error;
             if (!settings.Validate(out error)) throw new ArgumentException(error, "settings");
-            return "-n " + Quote(settings.ReceiverName) + " -nh -p -vs d3d11videosink" + (settings.Mute ? " -as 0" : "");
+            return "-n " + Quote(settings.ReceiverName) + " -nh -m -p -vs d3d11videosink" + (settings.Mute ? " -as 0" : "");
         }
 
         // Windows CRT command-line quoting, including trailing backslashes and embedded quotes.

@@ -17,7 +17,7 @@ try {
     $sources = @((Join-Path $PSScriptRoot 'CoreTests.cs'))
     $sources += @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src\Core') -Filter '*.cs' -File | ForEach-Object FullName)
     $sources += @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src\Infrastructure') -Filter '*.cs' -File | ForEach-Object FullName)
-    & $compiler /nologo /target:exe /optimize+ /warn:4 /warnaserror+ /langversion:5 /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll "/out:$testExecutable" @sources
+    & $compiler /nologo /codepage:65001 /target:exe /optimize+ /warn:4 /warnaserror+ /langversion:5 /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll "/out:$testExecutable" @sources
     if ($LASTEXITCODE -ne 0) { throw 'Core test compilation failed.' }
     & $testExecutable
     if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }

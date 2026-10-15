@@ -1,6 +1,6 @@
 # ADR-001 · Evoluir o receptor nativo Windows
 
-Status: implementado localmente; validação nativa pendente.
+Status: base Windows preservada; ampliada pelo ADR-002. Validação física pendente.
 
 ## Decisão
 

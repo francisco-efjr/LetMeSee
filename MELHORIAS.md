@@ -1,8 +1,28 @@
 # Melhorias · 2026-10-15
 
+## Incremento 1.2.0 · preparação e múltiplos ambientes
+
+O fluxo agora começa com um checklist contextual. Depois de concluir os requisitos, a tela principal tem somente **Ambiente** e **Começar a espelhar**; durante a execução, a segunda ação encerra a sessão própria ou conclui a orientação Apple.
+
+| Área | Implementado | Evidência e limite |
+| --- | --- | --- |
+| Cenários | Android/iOS, Windows/macOS, USB/Wi-Fi, sistema novo/pronto, instruções guiadas/técnicas e múltiplos aparelhos | Matriz com 55 critérios em `docs/qa/SCENARIOS.md`; hardware pendente |
+| Checklist | Diagnósticos automáticos separados de confirmações manuais; nenhuma caixa ignora motor ausente ou dispositivo não autorizado | 15 grupos C# e 57 verificações do domínio Swift passaram |
+| Validade | Nova conferência ao iniciar; troca de aparelho/ambiente, parada/erro, suspensão, mudança de rede aplicável e prazo de cinco minutos invalidam a preparação | Regressões de contexto, expiração e seleção A→B; detalhes em `docs/qa/VALIDACAO.md` |
+| Android | scrcpy somente visualização, clipboard desativado, serial explícito e servidor ADB privado em loopback | Pacote oficial 5.0.1 fixado/verificado no Windows; ferramentas locais aprovadas por identidade no Mac; sem sessão física executada |
+| Apple | UxPlay no Windows; orientação de Receptor AirPlay e QuickTime no Mac | Nenhuma alegação de conexão baseada apenas em processo ou orientação |
+| macOS | App SwiftUI nativo, domínio/infraestrutura testáveis e build local 1.2.0 | Build arm64/macOS 13+ passou; janela nativa sem inspeção automatizada e sem assinatura de distribuição |
+| Instalação | Android preparado por ação explícita; Bonjour exige integridade, assinatura Apple válida e instalador visível | 16 testes de segurança e 4 de pacote Android passaram em PS7/macOS; UAC/PS5.1 pendentes |
+| Interface | Duas ações principais, papel granulado e paleta Pulse; prévia marcada como demonstração | 20 testes Node, 64 combinações simuladas, 8 pares de contraste e inspeção no navegador |
+| CI | Suítes Windows e macOS, compilação e artefatos para revisão, sem publicar release | Configuração local revisada; execução remota pendente de envio |
+
+A produção Windows compila em C#5/.NET Framework 4.8/x64 com warnings como erros (**14 arquivos**). Os **7 grupos core** anteriores continuam passando. A prévia e os testes de domínio não substituem espelhamento físico, execução Windows, avaliação de acessibilidade ou teste de instalação. Veja `COMO-TESTAR.md` e `docs/qa/VALIDACAO.md` para comandos e limites.
+
+## Histórico · primeira etapa
+
 Branch local: `codex/pulse-workbench`. Base: `main` do repositório informado. O workspace estava vazio e sem commits; o código original foi obtido antes da implementação, sem alterações locais a preservar.
 
-## Resultado
+### Resultado da primeira etapa
 
 | ID | Antes | Implementado | Evidência |
 | --- | --- | --- | --- |
@@ -15,7 +35,7 @@ Branch local: `codex/pulse-workbench`. Base: `main` do repositório informado. O
 
 A aplicação segue C#/WinForms e .NET Framework 4.8. Não houve migração de stack ou adição de dependências do produto. O formato do Mo baile foi adaptado como separação de camadas, documentação de arquitetura/design e gates de qualidade. A revisão independente seguiu a separação autor/validador do Brain of Agent. O diff ultrapassa a referência de tamanho do modo melhoria porque as fronteiras de instalação e runtime exigiram serviços e validações próprios; o trabalho ficou nos seis grupos acima.
 
-## Validação executada
+### Validação da primeira etapa
 
 - Compilação de **7 arquivos de produção**, com Roslyn disponível em PowerShell portátil oficial, linguagem C#5, referências oficiais .NET Framework 4.8, plataforma x64 e warnings como erros: passou. O primeiro build apontou API de animação incompatível; foi substituída pela chamada nativa suportada e a compilação passou. Isso não substitui a execução WinForms.
 - Core em .NET portátil no macOS: **7 grupos passaram, 0 falharam**. O teste de XML excessivo descobriu uma exceção sem fallback; foi corrigida e coberta também para campos ausentes e versão desconhecida.
@@ -27,7 +47,7 @@ A aplicação segue C#/WinForms e .NET Framework 4.8. Não houve migração de s
 
 ## Pendente antes de distribuir
 
-Build e testes no Windows PowerShell 5.1/csc do Framework; abrir WinForms e verificar teclado/Narrator/DPI; processo/Job Object e quoting via Win32; instalação/UAC/firewall/upgrade/desinstalação; AirPlay com iPhone/iPad, código, áudio e limite de sessão. O roteiro está em `COMO-TESTAR.md`.
+Build e testes no Windows PowerShell 5.1/csc do Framework; abrir WinForms/SwiftUI e verificar teclado/leitores de tela/DPI; processo/Job Object e quoting via Win32; instalação/UAC/firewall/upgrade/desinstalação; Android USB/Wi-Fi e AirPlay/QuickTime com aparelhos físicos, código, áudio e encerramento. O roteiro está em `COMO-TESTAR.md`.
 
 O pacote legado não possui inventário/licenças completos de terceiros. Completar esses materiais, revisar versões/CVEs e assinar os artefatos antes de distribuição pública. Integridade foi endurecida; não há promessa de segurança absoluta ou de release pronta.
 

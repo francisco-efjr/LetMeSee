@@ -1,29 +1,25 @@
 @echo off
+setlocal
 chcp 65001 >nul
 title LetMeSee
-
-:: 1. Se a interface grafica compilada ja existir, inicia imediatamente
 if exist "%~dp0LetMeSee.exe" (
     start "" "%~dp0LetMeSee.exe"
+    if errorlevel 1 exit /b 1
     exit /b 0
 )
-
-:: 2. Se o arquivo C# existir, compila a interface nativa em 1 segundo
 if exist "%~dp0src\LetMeSeeApp.cs" (
-    if exist "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" (
-        call "%~dp0build_ui.bat"
-        if exist "%~dp0LetMeSee.exe" (
-            start "" "%~dp0LetMeSee.exe"
-            exit /b 0
-        )
-    )
+    call "%~dp0build_ui.bat"
+    if errorlevel 1 goto build_failed
+    if not exist "%~dp0LetMeSee.exe" goto build_failed
+    start "" "%~dp0LetMeSee.exe"
+    if errorlevel 1 exit /b 1
+    exit /b 0
 )
-
-:: 3. Modo fallback via console
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run.ps1"
-
-if %errorlevel% neq 0 (
-    echo.
-    echo O processo foi finalizado.
-    pause
-)
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run.ps1"
+set "result=%errorlevel%"
+if not "%result%"=="0" pause
+exit /b %result%
+:build_failed
+echo [ERRO] A interface nao foi compilada. Consulte a mensagem do build acima.
+pause
+exit /b 1

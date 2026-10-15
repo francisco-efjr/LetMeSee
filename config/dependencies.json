@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "runtime": {
+    "version": "v1.0.0",
+    "url": "https://github.com/francisco-efjr/LetMeSee/releases/download/v1.0.0/LetMeSee-bin.zip",
+    "sha256": "ac27a5c26b95d941302a53999727c28154e867c90aed8e0e8339f9270ee3f212",
+    "reviewed": true,
+    "reviewedOn": "2026-10-15",
+    "provenance": "GitHub release asset 555307335; API digest and downloaded file SHA256 independently matched. Archive layout checked; this records integrity of the existing baseline, not a third-party vulnerability audit.",
+    "assetSizeBytes": 128990344,
+    "bundledInstallerPolicy": "Never execute third_party/Bonjour64.msi automatically."
+  }
+}

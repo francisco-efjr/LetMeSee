@@ -1,0 +1,53 @@
+{
+  "scope": "Default native dark text pairs only; not a complete accessibility audit",
+  "pairs": [
+    {
+      "foreground": "Text",
+      "background": "Surface",
+      "ratio": 14.5,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "Muted",
+      "background": "Raised",
+      "ratio": 7.41,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "Accent",
+      "background": "Raised",
+      "ratio": 5.96,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "OnAccent",
+      "background": "Accent",
+      "ratio": 7.21,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "Ink",
+      "background": "Paper",
+      "ratio": 10.82,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "Orange",
+      "background": "Paper",
+      "ratio": 4.6,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "Success",
+      "background": "Surface",
+      "ratio": 9.74,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "Danger",
+      "background": "Surface",
+      "ratio": 8.69,
+      "minimum": 4.5
+    }
+  ]
+}

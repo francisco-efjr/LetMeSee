@@ -9,7 +9,16 @@ $RECYCLE.BIN/
 *.tmp
 *.zip
 
-# Caso queira NAO commitar os binarios no Git e usar apenas o download automatico,
-# descomente a linha abaixo:
-# bin/*
-# !bin/.gitkeep
+# Runtime verificado e saidas de build nao pertencem ao fonte
+bin/*
+!bin/.gitkeep
+LetMeSee.exe
+dist/
+.runtime-staging-*/
+.runtime-backup-*/
+tests/.security-tests-*/
+__pycache__/
+
+# Motores Android opcionais ficam separados do runtime AirPlay
+engines/
+tests/.android-package-tests-*/

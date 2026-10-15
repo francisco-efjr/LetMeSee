@@ -1,0 +1,33 @@
+name: Verify LetMeSee macOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-macos:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Run domain and infrastructure tests
+        run: zsh apps/macos/test.sh
+      - name: Compile the native app
+        run: zsh apps/macos/build.sh
+      - name: Archive local review build
+        run: ditto -c -k --sequesterRsrc --keepParent apps/macos/build/LetMeSee.app apps/macos/build/LetMeSee-macOS-review.zip
+      - name: Upload unsigned review artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: LetMeSee-macOS-review
+          path: apps/macos/build/LetMeSee-macOS-review.zip
+          if-no-files-found: error
+          retention-days: 14

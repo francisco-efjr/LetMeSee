@@ -1,88 +1,74 @@
 # LetMeSee
 
-Receptor de espelhamento de tela iOS (AirPlay) para estacoes de trabalho Windows.
+Receptor AirPlay para espelhar iPhone e iPad em um computador **Windows 10/11 x64**. Interface nativa em C#/WinForms, sem conta e sem telemetria implementada pelo aplicativo.
 
-Permite transmitir audio e video de iPhones e iPads diretamente para o computador em tempo real, sem a necessidade de instalar aplicativos ou perfis adicionais no dispositivo movel.
+![Prévia visual da interface](docs/design/preview.png)
 
----
+> A imagem é uma prévia de design renderizada no navegador. A recepção real usa o aplicativo Windows e abre o vídeo em uma janela do UxPlay. Esta branch ainda precisa da validação nativa descrita em [COMO-TESTAR.md](COMO-TESTAR.md).
 
-## Como Instalar e Usar
+## Conectar
 
-### Opcao 1: Instalador Oficial do Windows (Recomendado)
+1. Instale uma versão verificada do LetMeSee. O aplicativo começa **desligado**.
+2. Conecte o PC e o iPhone à mesma rede privada de confiança. No instalador, o acesso de firewall é opcional; também pode ser configurado em **Diagnóstico → Configurar firewall…**.
+3. Clique em **Iniciar receptor**. O aplicativo confere os arquivos do motor antes de executá-lo.
+4. No iPhone, abra **Central de Controle → Espelhar a Tela → LetMeSee** (ou o nome definido em Preferências).
+5. Digite o código AirPlay mostrado no aplicativo. Um código novo é gerado para cada sessão do receptor; a exigência de código vem ativada por padrão.
+6. Clique em **Parar receptor** ao terminar. Fechar a janela encerra o aplicativo por padrão. A permanência na bandeja precisa ser ativada em Preferências.
 
-A forma mais simples e pratica para a equipe:
+O estado **Pronto para receber** indica que o processo do motor está ativo. Ele não confirma que um iPhone já está conectado. A lista de endereços serve para conferência; não seleciona a interface de escuta.
 
-1. Acesse a pagina de [Releases do LetMeSee](https://github.com/francisco-efjr/LetMeSee/releases).
-2. Baixe o instalador **`LetMeSee-Setup.exe`**.
-3. Execute o instalador ("Avancar > Avancar > Concluir").
-   * O instalador cuida de tudo: cria as regras no Windows Firewall, instala o servico Bonjour e adiciona o icone na Area de Trabalho.
-4. Abra o **LetMeSee** pelo atalho na Area de Trabalho.
+## Funcionalidades
 
----
+- Nome personalizável, sem acrescentar nome de usuário ou hostname ao anúncio.
+- Código de conexão temporário, áudio opcional e encerramento automático após 15, 30 ou 60 minutos.
+- Preferências locais por usuário, em `%LOCALAPPDATA%\LetMeSee\settings.xml`.
+- Diagnóstico do runtime, interfaces IPv4 e serviço Bonjour sem administrador e sem enviar dados.
+- Bandeja opcional com ações para abrir, parar e sair.
+- Tokens de design inspirados na estrutura do Mo baile, cores do Pulse e textura local de papel. A abertura usa um radar original e respeita a configuração de animação do Windows.
 
-### Opcao 2: Execucao Portatil via Git
+## Compilar e testar no Windows
 
-Para desenvolvedores ou estacoes que preferem clonar o projeto:
+Requer .NET Framework 4.8 e Windows PowerShell 5.1. O projeto usa o compilador `csc.exe` já fornecido pelo Framework. Não há gerenciador de pacotes para a interface.
 
-```bash
-git clone https://github.com/francisco-efjr/LetMeSee.git
-cd LetMeSee
+```powershell
+.\build_ui.bat
+powershell -NoProfile -File .\tests\run-core-tests.ps1
+powershell -NoProfile -File .\tests\dependency_security.tests.ps1
 ```
 
-1. Execute **`configurar_firewall.bat`** como Administrador (apenas no primeiro dia).
-2. De dois cliques em **`iniciar.bat`** (ele compila e abre a interface visual automaticamente).
+Para preparar o runtime, faça a operação explícita abaixo. O script aceita somente a URL e o SHA-256 revisados em `config/dependencies.json`, extrai em staging e confere os arquivos antes de substituir `bin`:
 
----
+```powershell
+powershell -NoProfile -File .\scripts\download_deps.ps1
+.\iniciar.bat
+```
 
-## A Interface Visual (LetMeSee.exe)
+Não execute o script de download como administrador para uso portátil. Na instalação em `Program Files`, os arquivos são preparados durante o build e instalados pelo instalador. O aplicativo não baixa executáveis ao abrir ou iniciar a recepção.
 
-A aplicacao possui uma interface compacta e moderna, sem necessidade de telas pretas de terminal:
+O pipeline de pull request compila e testa a interface. O empacotamento do workflow prepara o runtime verificado, compila Inno Setup e gera SHA-256 dos artefatos. Não publica nem sobrescreve releases automaticamente.
 
-* **Botao Liga / Desliga:** Inicia ou interrompe o espelhamento a qualquer momento com um clique.
-* **Nome no iPhone:** Exibe o nome exato para conexao (ex: `LetMeSee - seu.usuario`), com botao de copiar.
-* **IP da Rede:** Mostra o endereco IP local ativo para facilitar a validacao.
-* **Bandeja do Sistema (Tray):** Ao fechar a janela, o aplicativo pode continuar em execucao silenciosa proximo ao relogio do Windows.
-
----
-
-## Como Conectar pelo iPhone / iPad
-
-1. Conecte o iPhone na **mesma rede Wi-Fi** do computador.
-2. Abra a **Central de Controle** (deslize o dedo a partir do canto superior direito da tela).
-3. Toque no botao **Espelhar a Tela** (icone com dois retangulos sobrepostos).
-4. Selecione o identificador do seu computador: **`LetMeSee - [seu.usuario]`**.
-5. A tela do dispositivo sera transmitida instantaneamente.
-
----
-
-## Estrutura do Projeto
+## Estrutura
 
 ```text
-LetMeSee/
-├── src/
-│   └── LetMeSeeApp.cs        # Codigo-fonte C# da interface grafica
-├── build_ui.bat              # Compilador local da interface via csc.exe nativo
-├── installer/
-│   └── setup.iss             # Script Inno Setup para gerar LetMeSee-Setup.exe
-├── .github/
-│   └── workflows/
-│       └── build-installer.yml # Esteira automatica de CI/CD para compilar o instalador
-├── iniciar.bat               # Launcher inteligente (abre a interface visual)
-├── configurar_firewall.bat   # Script de configuracao do Firewall do Windows
-├── diagnostico.bat           # Utilitario de diagnostico de rede e portas
-├── bin/                      # Motores de video (UxPlay, GStreamer, Bonjour)
-├── scripts/                  # Automacoes PowerShell de execucao e download
-└── README.md                 # Documentacao oficial
+src/
+  Core/                 # Preferências e contrato dos argumentos do motor
+  Infrastructure/       # Runtime, processo, rede e diagnóstico
+  UI/                   # Tokens, componentes e radar
+  LetMeSeeApp.cs         # Janela, navegação e apresentação dos estados
+  app.manifest          # Execução sem elevação e DPI
+config/                 # Dependência com versão, origem e hash fixados
+scripts/                # Download explícito, diagnóstico e firewall
+installer/              # Instalador offline e acesso de rede opt-in
+tests/                  # Casos negativos de integridade, arquivo, entrada e processo
+docs/                   # Arquitetura, design e evidências de validação
 ```
 
----
+## Rede e segurança
 
-## Resolucao de Problemas Comuns
+As regras criadas por esta versão aceitam **somente perfil Privado, sub-rede local e executáveis específicos**. O app não altera a categoria da sua rede, não desativa o firewall e não instala Bonjour silenciosamente. Se o pacote depender do serviço Bonjour e ele estiver ausente, instale-o por uma fonte oficial e verifique novamente o diagnóstico.
 
-| Sintoma | Causa Provavel | Acao Recomendada |
-| :--- | :--- | :--- |
-| O computador nao aparece no iPhone | Dispositivos em redes diferentes | Certifique-se de que ambos estao no mesmo Wi-Fi. |
-| O computador nao aparece no iPhone | Firewall bloqueando portas | Execute `configurar_firewall.bat` como Administrador ou reinstale via `LetMeSee-Setup.exe`. |
-| Uso simultaneo com VPN Corporativa | VPN bloqueando rede local | Nas configuracoes da VPN, habilite **"Allow local LAN access"**. |
-| Rede Guest / Visitante | Isolamento de clientes (AP Isolation) | Utilize a rede corporativa principal; redes de visitantes bloqueiam conexoes locais. |
-| Validacao de IPs | Conexao ativa | Execute `diagnostico.bat` para verificar os IPs locais da maquina. |
+Use **Diagnóstico** se o receptor não aparecer. Confirme a mesma rede, se o Wi-Fi permite comunicação entre clientes e se a VPN permite acesso local. Não é necessário desativar as proteções do Windows.
+
+O SHA-256 impede usar um pacote diferente do que foi revisado. Não prova ausência de vulnerabilidades nem substitui assinatura do instalador. As limitações e o modelo de ameaças estão em [SECURITY.md](SECURITY.md); componentes de terceiros, em [THIRD_PARTY.md](THIRD_PARTY.md).
+
+Veja [MELHORIAS.md](MELHORIAS.md), [COMO-TESTAR.md](COMO-TESTAR.md) e [o contrato de design](docs/design/DESIGN.md).

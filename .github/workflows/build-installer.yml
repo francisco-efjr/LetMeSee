@@ -1,57 +1,115 @@
-name: Build LetMeSee Windows Installer
+name: Verify and build LetMeSee for Windows
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build GUI & Setup Executable
-    runs-on: windows-latest
-    permissions:
-      contents: write
+    name: Security tests, GUI and offline installer
+    runs-on: windows-2022
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: powershell
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
-      - name: Install Inno Setup
+      - name: Test runtime trust boundaries on Windows PowerShell 5.1
         run: |
-          choco install innosetup --no-progress -y
+          $ErrorActionPreference = 'Stop'
+          & .\tests\dependency_security.tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency security tests failed.' }
 
-      - name: Compile C# GUI (LetMeSee.exe)
-        shell: cmd
+      - name: Test application core
         run: |
-          call build_ui.bat
+          $ErrorActionPreference = 'Stop'
+          & .\tests\run-core-tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
 
-      - name: Download and Prepare Binaries
-        shell: powershell
+      - name: Check design token contrast and preview JavaScript syntax
         run: |
-          $binUrl = "https://github.com/francisco-efjr/LetMeSee/releases/download/v1.0.0/LetMeSee-bin.zip"
-          Write-Host "Baixando $binUrl..."
-          Invoke-WebRequest -Uri $binUrl -OutFile "LetMeSee-bin.zip"
-          Expand-Archive -Path "LetMeSee-bin.zip" -DestinationPath "bin" -Force
-          Remove-Item "LetMeSee-bin.zip" -Force
-
-      - name: Compile Inno Setup Installer
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path "dist"
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
-          if (-not (Test-Path "dist\LetMeSee-Setup.exe")) {
-              throw "LetMeSee-Setup.exe nao foi gerado com sucesso."
+          $ErrorActionPreference = 'Stop'
+          python tests/check-design.py
+          if ($LASTEXITCODE -ne 0) { throw 'Design checks failed.' }
+          $preview = [IO.File]::ReadAllText((Join-Path $PWD 'docs\design\preview.html'))
+          $scripts = [regex]::Matches($preview, '(?is)<script(?:\s[^>]*)?>(.*?)</script>')
+          if ($scripts.Count -eq 0) { throw 'Preview JavaScript was not found.' }
+          $index = 0
+          foreach ($script in $scripts) {
+            $path = Join-Path $env:RUNNER_TEMP ('letmesee-preview-' + $index + '.js')
+            [IO.File]::WriteAllText($path, $script.Groups[1].Value, (New-Object Text.UTF8Encoding($false)))
+            node --check $path
+            if ($LASTEXITCODE -ne 0) { throw 'Preview JavaScript syntax check failed.' }
+            $index++
           }
 
-      - name: Upload Artifact (CI)
-        uses: actions/upload-artifact@v4
-        with:
-          name: LetMeSee-Setup
-          path: dist/LetMeSee-Setup.exe
+      - name: Compile C# GUI
+        shell: cmd
+        run: call build_ui.bat
 
-      - name: Publish Setup to GitHub Release (v1.0.0)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
+      - name: Prepare pinned runtime explicitly
         run: |
-          gh release upload v1.0.0 dist/LetMeSee-Setup.exe --clobber || true
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\download_deps.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime preparation failed.' }
+          . .\scripts\dependency_security.ps1
+          Assert-RuntimeIntegrity -RuntimeDirectory (Join-Path $PWD 'bin')
+
+      - name: Install SHA256-pinned Inno Setup compiler
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.0.exe'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_0/innosetup-6.7.0.exe' -OutFile $installer
+          $expected = 'f45c7d68d1e660cf13877ec36738a5179ce72a33414f9959d35e99b68c52a697'
+          if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $expected) { throw 'Inno Setup SHA256 mismatch.' }
+          $toolDirectory = Join-Path $env:RUNNER_TEMP 'letmesee-inno'
+          $process = Start-Process -FilePath $installer -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="' + $toolDirectory + '"') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw ('Inno Setup installation failed: ' + $process.ExitCode) }
+
+      - name: Compile offline installer and package portable build
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & (Join-Path $env:RUNNER_TEMP 'letmesee-inno\ISCC.exe') 'installer\setup.iss'
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath 'dist\LetMeSee-Setup.exe')) { throw 'Installer compilation failed.' }
+          $package = Join-Path $env:RUNNER_TEMP 'LetMeSee-portable'
+          New-Item -ItemType Directory -Path $package | Out-Null
+          foreach ($item in @('LetMeSee.exe', 'bin', 'scripts', 'config', 'iniciar.bat', 'configurar_firewall.bat', 'diagnostico.bat', 'README.md', 'SECURITY.md', 'THIRD_PARTY.md')) {
+            Copy-Item -LiteralPath $item -Destination $package -Recurse
+          }
+          Copy-Item -LiteralPath 'installer\app_icon.ico' -Destination (Join-Path $package 'app_icon.ico')
+          Compress-Archive -Path (Join-Path $package '*') -DestinationPath 'dist\LetMeSee-portable.zip' -CompressionLevel Optimal
+          $checksums = foreach ($file in @(Get-ChildItem -LiteralPath 'dist' -File | Sort-Object Name)) {
+            (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $file.Name
+          }
+          [IO.File]::WriteAllLines((Join-Path $PWD 'dist\SHA256SUMS.txt'), $checksums, (New-Object Text.UTF8Encoding($false)))
+          Copy-Item -LiteralPath 'bin\runtime-files.sha256' -Destination 'dist\runtime-files.sha256'
+
+      - name: Upload review artifacts and checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: LetMeSee-windows-review-${{ github.run_number }}
+          path: |
+            dist/LetMeSee-Setup.exe
+            dist/LetMeSee-portable.zip
+            dist/SHA256SUMS.txt
+            dist/runtime-files.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      # Distribution is deliberately a separate, reviewed process. This workflow
+      # has no write token, release mutation, clobber, or swallowed build failures.

@@ -1,94 +1,73 @@
 <#
 .SYNOPSIS
-    Configura regras de entrada no Windows Firewall para o LetMeSee.
-.DESCRIPTION
-    Aplica liberacao de rede para o uxplay.exe e portas de servico (mDNS 5353, TCP 7000/7100, UDP 6000-6001/7011).
-    Tambem instala o servico Bonjour caso necessario. Requer privilegios administrativos.
+    Opt-in inbound access for a verified runtime on private local networks only.
 #>
+[CmdletBinding()]
+param([switch]$Remove)
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'dependency_security.ps1')
 
-[Console]::OutputEncoding = [System.Text.Encoding]::ASCII
-$Host.UI.RawUI.WindowTitle = "LetMeSee - Configuracao de Firewall"
+$ruleNames = @('LetMeSee-AirPlay-TCP', 'LetMeSee-AirPlay-UDP', 'LetMeSee-Bonjour-mDNS')
+$legacyNames = @(
+    'LetMeSee (App)', 'LetMeSee (UxPlay App)', 'LetMeSee (mDNS 5353)', 'LetMeSee (AirPlay TCP)', 'LetMeSee (AirPlay UDP)',
+    'LetMeSeeYourScreen (UxPlay App)', 'LetMeSeeYourScreen (mDNS 5353)', 'LetMeSeeYourScreen (AirPlay TCP)', 'LetMeSeeYourScreen (AirPlay UDP)',
+    'Espelho iOS (UxPlay App)', 'Espelho iOS (mDNS 5353)', 'Espelho iOS (AirPlay TCP)', 'Espelho iOS (AirPlay UDP)'
+)
 
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "         LETMESEE - CONFIGURACAO DE FIREWALL              " -ForegroundColor Yellow
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host ""
+function Remove-LetMeSeeRules {
+    # Enumerate once so absence is harmless and actual access/command errors remain errors.
+    $existing = @(Get-NetFirewallRule -ErrorAction Stop)
+    foreach ($rule in $existing) {
+        if ($ruleNames -contains $rule.Name -or $legacyNames -contains $rule.DisplayName) {
+            $rule | Remove-NetFirewallRule -ErrorAction Stop
+        }
+    }
+}
 
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "[ERRO] Este script requer privilegios de Administrador." -ForegroundColor Red
-    Write-Host "Execute o arquivo 'configurar_firewall.bat' como Administrador." -ForegroundColor Yellow
-    Write-Host ""
-    Read-Host "Pressione ENTER para sair..."
+try {
+    $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $admin) { throw 'Administrator permission is required. Run configurar_firewall.bat and accept the Windows prompt.' }
+    if ($Remove) {
+        Remove-LetMeSeeRules
+        Write-Host 'LetMeSee firewall rules removed.'
+        exit 0
+    }
+    $runtime = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin'
+    Assert-RuntimeIntegrity -RuntimeDirectory $runtime
+    $uxplay = [IO.Path]::GetFullPath((Join-Path $runtime 'uxplay.exe'))
+    Remove-LetMeSeeRules
+    try {
+        New-NetFirewallRule -Name $ruleNames[0] -DisplayName 'LetMeSee - AirPlay TCP (private local network)' -Group 'LetMeSee' `
+            -Direction Inbound -Action Allow -Enabled True -Profile Private -RemoteAddress LocalSubnet `
+            -Program $uxplay -Protocol TCP -LocalPort 7000,7001,7100 -EdgeTraversalPolicy Block -ErrorAction Stop | Out-Null
+        New-NetFirewallRule -Name $ruleNames[1] -DisplayName 'LetMeSee - AirPlay UDP (private local network)' -Group 'LetMeSee' `
+            -Direction Inbound -Action Allow -Enabled True -Profile Private -RemoteAddress LocalSubnet `
+            -Program $uxplay -Protocol UDP -LocalPort 6000,6001,7011 -EdgeTraversalPolicy Block -ErrorAction Stop | Out-Null
+
+        # Bonjour is never installed here. Only a valid Apple-signed existing service gets a scoped mDNS rule.
+        $bonjour = Get-CimInstance -ClassName Win32_Service -Filter "Name='Bonjour Service'" -ErrorAction Stop
+        if ($null -ne $bonjour) {
+            $bonjourExe = $null
+            if ($bonjour.PathName -match '^"([^"]+\.exe)"(?:\s|$)') { $bonjourExe = $Matches[1] }
+            elseif ($bonjour.PathName -match '^([^\s]+\.exe)(?:\s|$)') { $bonjourExe = $Matches[1] }
+            if ($bonjourExe -and (Test-Path -LiteralPath $bonjourExe -PathType Leaf)) {
+                Assert-NoReparsePath -Path $bonjourExe
+                $signature = Get-AuthenticodeSignature -LiteralPath $bonjourExe -ErrorAction Stop
+                if ($signature.Status -eq 'Valid' -and $signature.SignerCertificate.Subject -match '(?:^|,\s*)O=Apple Inc\.?(?:,|$)') {
+                    New-NetFirewallRule -Name $ruleNames[2] -DisplayName 'LetMeSee - Bonjour mDNS (private local network)' -Group 'LetMeSee' `
+                        -Direction Inbound -Action Allow -Enabled True -Profile Private -RemoteAddress LocalSubnet `
+                        -Program $bonjourExe -Protocol UDP -LocalPort 5353 -EdgeTraversalPolicy Block -ErrorAction Stop | Out-Null
+                } else { Write-Warning 'Bonjour signature could not be validated as Apple. No mDNS rule was added.' }
+            } else { Write-Warning 'Bonjour service has an unexpected executable path. No mDNS rule was added.' }
+        } else { Write-Warning 'Bonjour is not installed. Obtain it separately from its trusted publisher if discovery is unavailable.' }
+    } catch {
+        Remove-LetMeSeeRules
+        throw
+    }
+    Write-Host 'Firewall configured: verified programs, Private profile, LocalSubnet only. Public networks remain blocked.'
+    exit 0
+} catch {
+    Write-Error ('Firewall configuration failed: ' + $_.Exception.Message) -ErrorAction Continue
     exit 1
 }
-
-$ScriptDir = Split-Path -Parent $PSScriptRoot
-$BinDir = Join-Path $ScriptDir "bin"
-$UxPlayExe = Join-Path $BinDir "uxplay.exe"
-$BonjourMsi = Join-Path $BinDir "third_party\Bonjour64.msi"
-
-# 1. Instalar o servico Bonjour se o instalador estiver presente
-$bonjourService = Get-Service -Name "Bonjour Service" -ErrorAction SilentlyContinue
-if (-not $bonjourService -and (Test-Path $BonjourMsi)) {
-    Write-Host "[1/4] Instalando servico Bonjour (descoberta AirPlay)..." -ForegroundColor Green
-    try {
-        Start-Process msiexec.exe -ArgumentList "/i `"$BonjourMsi`" /passive /norestart" -Wait
-        Write-Host "      -> Servico Bonjour instalado com sucesso." -ForegroundColor Gray
-    } catch {
-        Write-Host "      [AVISO] Nao foi possivel instalar o Bonjour: $_" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "[1/4] Servico Bonjour ja detectado no sistema." -ForegroundColor Green
-}
-
-# 2. Configurar regra para o executavel
-Write-Host "[2/4] Aplicando regra de executavel (uxplay.exe)..." -ForegroundColor Green
-try {
-    netsh advfirewall firewall delete rule name="Espelho iOS (UxPlay App)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSeeYourScreen (UxPlay App)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSee (UxPlay App)" | Out-Null
-    
-    netsh advfirewall firewall add rule name="LetMeSee (UxPlay App)" dir=in action=allow program="$UxPlayExe" enable=yes profile=any | Out-Null
-    Write-Host "      -> Regra de executavel aplicada com sucesso." -ForegroundColor Gray
-} catch {
-    Write-Host "      [AVISO] Nao foi possivel adicionar a regra do aplicativo: $_" -ForegroundColor Yellow
-}
-
-# 3. Liberar mDNS / Bonjour
-Write-Host "[3/4] Liberando porta de descoberta mDNS / Bonjour (UDP 5353)..." -ForegroundColor Green
-try {
-    netsh advfirewall firewall delete rule name="Espelho iOS (mDNS 5353)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSeeYourScreen (mDNS 5353)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSee (mDNS 5353)" | Out-Null
-
-    netsh advfirewall firewall add rule name="LetMeSee (mDNS 5353)" dir=in action=allow protocol=UDP localport=5353 profile=any | Out-Null
-    Write-Host "      -> Porta UDP 5353 liberada." -ForegroundColor Gray
-} catch {
-    Write-Host "      [AVISO] Nao foi possivel liberar a porta 5353: $_" -ForegroundColor Yellow
-}
-
-# 4. Liberar portas de streaming
-Write-Host "[4/4] Liberando portas de transmissao AirPlay (TCP 7000,7100 / UDP 6000-6001,7011)..." -ForegroundColor Green
-try {
-    netsh advfirewall firewall delete rule name="Espelho iOS (AirPlay TCP)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSeeYourScreen (AirPlay TCP)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSee (AirPlay TCP)" | Out-Null
-    netsh advfirewall firewall add rule name="LetMeSee (AirPlay TCP)" dir=in action=allow protocol=TCP localport=7000,7100 profile=any | Out-Null
-
-    netsh advfirewall firewall delete rule name="Espelho iOS (AirPlay UDP)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSeeYourScreen (AirPlay UDP)" | Out-Null
-    netsh advfirewall firewall delete rule name="LetMeSee (AirPlay UDP)" | Out-Null
-    netsh advfirewall firewall add rule name="LetMeSee (AirPlay UDP)" dir=in action=allow protocol=UDP localport=6000,6001,7011 profile=any | Out-Null
-    Write-Host "      -> Portas de streaming liberadas." -ForegroundColor Gray
-} catch {
-    Write-Host "      [AVISO] Nao foi possivel liberar as portas de streaming: $_" -ForegroundColor Yellow
-}
-
-Write-Host ""
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  FIREWALL CONFIGURADO COM SUCESSO!                       " -ForegroundColor Green
-Write-Host "  O servico agora pode receber conexoes de rede local.    " -ForegroundColor White
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host ""
-Start-Sleep -Seconds 3

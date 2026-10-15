@@ -1,591 +1,349 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
+using System.Threading;
 using System.Windows.Forms;
+using Timer = System.Windows.Forms.Timer;
 
 namespace LetMeSee
 {
-    public class MainForm : Form
+    internal static class Program
     {
-        // Paleta de Cores Tática (Inspirada no Ícone Oficial)
-        private static readonly Color BgDark = Color.FromArgb(18, 20, 24);         // #121418 - Fundo principal grafite
-        private static readonly Color HeaderDark = Color.FromArgb(12, 13, 16);     // #0C0D10 - Barra superior
-        private static readonly Color CardBg = Color.FromArgb(26, 29, 35);         // #1A1D23 - Superficie do card
-        private static readonly Color CardBorder = Color.FromArgb(55, 59, 68);     // #373B44 - Borda sutil
-        private static readonly Color TacticalOrange = Color.FromArgb(215, 84, 43); // #D7542B - Laranja do icone (Radar)
-        private static readonly Color OrangeHover = Color.FromArgb(235, 99, 56);   // #EB6338 - Laranja destaque
-        private static readonly Color SonarGreen = Color.FromArgb(0, 230, 118);    // #00E676 - Verde radar ativo
-        private static readonly Color StatusOff = Color.FromArgb(120, 125, 135);   // Cinza inativo
-        private static readonly Color TextPrimary = Color.FromArgb(245, 246, 248); // Branco suave
-        private static readonly Color TextSecondary = Color.FromArgb(155, 160, 170); // Cinza texto
-
-        // Ícone oficial embutido em Base64
-        private const string IconBase64 =
-            "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAANn0lEQVR4nO1ZCVhV17Ve+0x3OHAvMyJWlFBFDZMaiYlhsCWDIRpR" +
-            "0xh52q9pML5nTPQ1DjGKphjnVBqSGp9orZK0ahpArL4vEKmCDAoyI8MFBGMAQeByudMZ9vv24ZL0aVTUNH0vX9b3HS737nP2Xv9a" +
-            "/1p77XUAfpQf5YEEPeD49yUYfqiCbjeAMf6/Yn1FEELf6gXmpu9EaUyUP3z48CkAGCsIggwAFPxrRGZZlqzdjDF+xgFC0fF2AL4W" +
-            "u90+QaVSjSb/I4QIrH+Khvg2v5M1McbKp81mU9/u+dsCQAiZifVFUVQ8gBH1nSgrY/KJAQECGgFQyGGgoRsGOQCyTJYFGSFEEV3u" +
-            "GYCDNkNaU6zdAug+kwF5SsIYGIRAy1DAUgjLgGSLhPGAKIM4qOwQfwkkilWrCbAhHaj7AaBYglieFawwuegTICAwou8pqxHFVTQF" +
-            "PEtho12SS68PoNyOfqq6x0pfs0rQa5dBJPQkaxGTSxLwPA/rN2wEtUYjyLJMUxSF7w/AN0gUEKwwfAASBmAQgI5j8NV+m7zf0E2n" +
-            "t/bRzRYMwKl7EaIqnXlNvccIl06j0XjdRadz7x8YcDOZTAGcRhuMEPJ2cnLiSBxYLBb6AQGA4omh6w6hp/CbKO+iosEkStJ7VR30" +
-            "wYYeuktmzF4jfpI5Y8xPPj6ckpIXPOPxnp7ODs3evXvd2tvbnQHAumnTphsuLi7G1tZWwibvzMzMp/v6+uJpmh7poJF03wCGIxKW" +
-            "gaEQuHA0nG7rk7aWt9MNViSP8hmVujzq0ff2fXz88rm2Fli6evWLTs667TzPewOASjEQxrBz505Ro9F0+Pr6XlSpVNksy55sbm7+" +
-            "o91u1+Xm5g7tS/ifAkCUMTizNFglWX6zsA2ltfTROjf3M3NmhK7K+u+cspRDzV+vyTBMtl6v32M0Grf19/cr2AGA0IQxm82+AODL" +
-            "MMwctVr9vru7e3lQUNC7VVVVRx1ekL9zACQI3dUMVN+wSCsKWulaK4VDH5741qXyyp0ZGRleN/qt22maZjHGZ3NzczMQQl0A8LtF" +
-            "ixYVZGdnn+zo6HBDCMkkA5HNiogoithkMoHJZArhef4phNBRjPEtAB4ouZPkQfK6h5qBz5p7xOezDXQr0rbMi4mMqayq2brol4vC" +
-            "09LSXo6Pj9/MMMzHGONJU6dOfX/ixImrpk+fHpGWllYYGRn5rF6vtxIKDc6pKKl4gwQVy7LY3d09k4xHRkbeosN9AyDpkaYAnDka" +
-            "v1t6TfqPgquMzmvkqb0bNzz2adbpHEmWobai1rm2tla9dOlSc3Z29sWzZ89u4Xk+o6OjY3dXV9cuhmHg6NGjhYGBgf/JcdzN1iWI" +
-            "aJVKZYuJiSklP0RFRf0v6xNBt6uFDhw4cBkBjLNLsswKFmpa3iFg7WYljYpYBp6hwCZheWVBK3W63QqTAvy3Ga60rLNabeDn5xcX" +
-            "ERHxy7Fjx06lKIrv6uqqLi4uTi8uLv6AZdmBhx566NcqleqZ0aNHbzxx4kQNx3HY09Pz4pdffjllKB4QQhLGmPb09Czo7Ox83LFb" +
-            "3zV/D96FMUpNTa07kJqK9+77Lyn1g9/jyoVT8OV5E3BF3CR8dWEwzosdL07UqzBSaweiH3/0JZoeTNWPPPLInk8//RRbrYQV30hF" +
-            "RQWOj48vAoAR5L7nnntubHh4+P7ExEQlDh977LF4AoSElENRgcSDv7//BjI+ZcoU9tsUHjaFlJllDJ4aBs53msS5nzfSTZKq+aVn" +
-            "ZkadyS/8WJIkCA4OXpuSkvJ6XFycoFKpiCUVIIQaQUFB9o8++mjaiy+++BkA8CdOnGhmGObKuXPnosn8CxcuPOXk5NTnsL5CH41G" +
-            "A+7u7n9tamoKWb9+ve6+AZDZsCNYj9R3iS990cxIzu75f9ry2/C0z7IuLFmyhFSLIxcsWLBx2rRphKd0cXExvX37dpScnIzS0tIo" +
-            "QRA4rVYrrFy58tGgoKAFCQkJrFqtPieKYgTxwvLly408z1c7liReQDzP15SWllbn5+f/G8dx8rfRnhqO8uQmEqy/Lf1KevPiV8wo" +
-            "P7/jvd3XZ/zp88/Hx8bGPnLo0CGrv7//o3FxcRrySEtLC3X69GlISEiANWvWKPNkZWUpi4eFhcmBgYEx+/btE4KDg4s4jtNu3rxZ" +
-            "RAgJoiiWOcpoiVBSq9UeEEXRxW63P8nzvLJh3CzD2Acw8Sm8lt+CTzb10hPHB+xsar6y+pWEhMXl5eWv8Tx/44UXXjA0NDSEZWVl" +
-            "4fHjx6OamhqSMcDV1RVKSkoIvyEnJ4dMRrMsi9RqdVRMTMwfDAYD09PTM2327Nl7Cf+rqqqmt7e3E5uxWq1W9PDwOHTs2LF44t3o" +
-            "6GjxngGQmRiKwj1WQf57t0CNe2jsvxuar/whLCxM4+/vX1BcXOyTnJy8LSwsDE6ePKnU8DRNIz8/P8XiERER0NjYCEuXLiXBDTqd" +
-            "DoWGhsL06dNHLlu27NWBgQFISUmBFStWBJOU+vbbb8OOHTtEiqIYvV7/t0uXLnX19vauoGnaMnTAuXcPYIxVajX90vOx8w598pe/" +
-            "jhs3/jMvL6+1a9asqWMYJqezsxOzLCtYrVbmrbfeovz9/SEkJATq6upg27Zt4ObmRhSH7Oxs5SLfJ0yYgJ2cnKTRo0fDmDFjKI1G" +
-            "o/C7vb1dqf1JOe3t7b05PT19cn19/U8tFkutLJOzza3n4rvGgCRJjEarNb+xel29SqXOMxgMz5vN5oDExETK1dX1cm5u7hXicsLZa" +
-            "9euQXV1tXLCiouLgyVLlsDTTz8NycnJwLKsorzVaoXCwkK0ePFiZtasWczu3bupjIwMYkimqKhICTm9Xp9XUlJSXFZWtk0phG9zoB" +
-            "8WAPKwIAhUbGzsOaPR+LjFYpEMBsO8d955R75+/bopJycnpa6uDi1YsEBqamqClpYWIAEsiiL4+PgAsfLcuXOBUKevr08BQiys1+u" +
-            "B4zi4cOECqFQqxWPkImM+np4r8/LyQmma/rnZbCbFEXPfAMhpaGBgQN3R3u4yWEFgqru7O27dunU+ZLisrCwlKSmpxGazsSNHjhRe" +
-            "f/11aGtrg61bt8L+/fvh4MGD8OGHHyrxQHhO4oRcFEVBb28vPPnkk4qXkpKSSJDSPj7eRy+UV1ysqa19n3Dmrvrd7QaHF8jiyuZC" +
-            "qkaTyaQ/fvz4Noqi5MTEROHIkSNxq1ataujp6WEJt1955RW8YcMG8PDwwATM/PnzYdeuXYqiJHCJxcmni4sLpKamQmlpqXzkSBpy" +
-            "c3U1eYTNWVa1ael8VwZmmO2CQN0Fw7DLaVnGQxsJJcuy1NbWtjg8PDx78+bNhzHGbQihiKtXr36wbNmyuNraWjxixAiYNWsWIpb2" +
-            "8vIiZTE88cQTkJGRAUajEcgum5WVpYCMjo6WOJZhx0+alHB+y5iBqq3H37d6BMqI1d7VA8MGwDKDxY4jlckWi0Wurq4+MHPmzH6E" +
-            "UDpJIpmZmfMaGxtn19fXH/Pw8OBqamr6u7q6nFtbWxUAgYGB8NRTTwH5np6eTjIQjomJERsbG9nAgIDdBXnnP6nfCpnOkm2EFSMJK" +
-            "aX1A3pAliTE8062sBkR6yqLC+ZYzeZIs8XKipJELImLi4uPTp48eXVJScnvCb1qamoyZ86c+XMS7ElJSdyePXvOzJs3j1haCWCyw" +
-            "bm4uOCGhgZp6tSpTGVlJTtx3E+Ta+oNv7n86s926o3tz3XKrEgBZqSbDi/fJncvJRDCDMhs9quzy24YTVH2qEV+vgHj1nt7elbonH" +
-            "hkNg+wFRUVv/P19S2KjIyMxRizZ86cOVdQUHDezc2tMSAgQPbx8SEtQlLcif39/fLatWtRSEgIY2io750wKXhxTWPzG/XLfrbLuf" +
-            "/6b/qsggiIGjYz7nij4jxEgWyzoLpjn3xxef7Dl9w8Wg+6pu48wI75xbt87MKxftWFcy1dnc+ajH0zKyvKT3h7e/WMGjUyV+ekuy" +
-            "hIEltUVESRSpXsD4UFBXA+Px96e3s6Ro0ee0CXbthSHtLEGF5eks4br8/psdolCqF7OuYO62YMgGw2O6glS5i1Swi7/MbG5MsvPP" +
-            "zWw+PaUf2upD+rJsS/Zx8wqcZEPBve21AWwWD6CZPZ/CuLxcLt2LGjlqRiUcJXBUkqdAma8oVsq/l7X3cn5Kc+81pDT9cmrWhzuy" +
-            "FIEoVoGvAtnZMHB0CEAgxWUZKtkk1GgBlOQpHWr8yRnWs3fVAdF1jGvxr9uc8M7Sk4lbYf+KgtOmdnbLHbAVEUMDQDdrORBuh3g3" +
-            "deDm27yu4zm4zPU91feiKbAP0YSTQCRXmkXPJ3DQCBwGlI24rCiKYwYGwnAUZSEgZGg3GoaDWHtnxlfdOy/G0QEW3MWzClm0KyCX" +
-            "EqwIIdVbwc5U1JoqczGlQQAw2dmJYQx5H+rqPzhhQAZK3hvhy6MwBEJpRBZDi4FP6Lb7rHg3+H2n2kCT7YeMYYUVimaQQ6hkK6b9" +
-            "rySGkCCDIGGVGSUttgTKr0W1uGjjXImoonSCvzDq39OwGQ/+ECgSVWuXtGI6nPTtS4uQBzvPEhred/eEmBbzeZg0ZDXJLvGQDGWEt" +
-            "aHaT2+W5ecNzjGytEKz0isnfYbDbtPQPgOK4WY2x1UOP7f8WEB3d8sjbHcV/3JX9wL/n+3wt6wPHvS/C/WoEf5Qcr/wOwKYlsiTy" +
-            "NnAAAAABJRU5ErkJggg==";
-
-        private Process _mirrorProcess;
-        private bool _isRunning = false;
-        private string _deviceName;
-        private string _localIp;
-
-        private Panel _headerPanel;
-        private PictureBox _logoBox;
-        private Label _titleLabel;
-        private Label _subtitleLabel;
-        private Label _statusDot;
-        private Label _statusLabel;
-        private Button _toggleButton;
-        private Panel _cardPanel;
-        private Label _deviceTitleLabel;
-        private Label _deviceValueLabel;
-        private Button _copyDeviceButton;
-        private Label _ipTitleLabel;
-        private Label _ipValueLabel;
-        private Label _instructionLabel;
-        private CheckBox _trayCheckBox;
-        private Button _firewallButton;
-        private NotifyIcon _trayIcon;
-        private ContextMenuStrip _trayMenu;
-        private bool _forceClose = false;
-
         [STAThread]
-        public static void Main()
+        private static void Main()
         {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            // Prevent two receivers competing for the same ports in the current user session.
+            using (Mutex instance = new Mutex(false, "Local\\LetMeSee.Desktop"))
+            {
+                bool acquired;
+                try { acquired = instance.WaitOne(0, false); }
+                catch (AbandonedMutexException) { acquired = true; }
+                if (!acquired) { MessageBox.Show("O LetMeSee já está aberto. Procure o ícone na bandeja ou a janela na barra de tarefas.", "LetMeSee"); return; }
+                try
+                {
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    Application.Run(new MainForm());
+                }
+                finally { instance.ReleaseMutex(); }
+            }
         }
+    }
+
+    public sealed class MainForm : Form
+    {
+        private readonly string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        private readonly SettingsStore store = new SettingsStore();
+        private readonly ReceiverService receiver;
+        private AppSettings settings;
+        private readonly Panel content = new Panel();
+        private readonly Label status = new Label();
+        private readonly Label footer = new Label();
+        private readonly Timer clock = new Timer();
+        private readonly ToolTip tips = new ToolTip();
+        private NotifyIcon tray;
+        private ContextMenuStrip trayMenu;
+        private ActionButton toggle;
+        private Label message;
+        private Label elapsed;
+        private SonarPanel sonar;
+        private ComboBox addresses;
+        private DateTime? startedAt;
+        private bool forceClose;
+        private string currentPage = "Espelhamento";
+        private ActionButton[] navigation;
+        private int diagnosticGeneration;
+        private bool disposed;
 
         public MainForm()
         {
-            InitializeData();
-            InitializeComponents();
-            InitializeTray();
-        }
-
-        private static Icon GetEmbeddedIcon()
-        {
-            try
+            settings = store.Load(); receiver = new ReceiverService(appDirectory);
+            receiver.StateChanged += ReceiverChanged;
+            Text = "LetMeSee · Receptor AirPlay";
+            Font = DesignTokens.Body; ForeColor = DesignTokens.Text; BackColor = DesignTokens.Window;
+            AutoScaleMode = AutoScaleMode.Dpi; AutoScaleDimensions = new SizeF(96, 96);
+            ClientSize = new Size(1100, 780); MinimumSize = new Size(1040, 780);
+            StartPosition = FormStartPosition.CenterScreen;
+            string iconPath = Path.Combine(appDirectory, "app_icon.ico");
+            if (File.Exists(iconPath)) Icon = new Icon(iconPath);
+            else Icon = SystemIcons.Application;
+            BuildShell(); BuildTray(); ShowMirror();
+            FormClosing += ClosingRequested;
+            clock.Interval = 1000; clock.Tick += TickClock; clock.Start();
+            Shown += delegate
             {
-                byte[] bytes = Convert.FromBase64String(IconBase64);
-                using (MemoryStream ms = new MemoryStream(bytes))
-                {
-                    using (Bitmap bmp = new Bitmap(ms))
-                    {
-                        return Icon.FromHandle(bmp.GetHicon());
-                    }
-                }
-            }
-            catch
-            {
-                return SystemIcons.Application;
-            }
-        }
-
-        private static Image GetEmbeddedImage()
-        {
-            try
-            {
-                byte[] bytes = Convert.FromBase64String(IconBase64);
-                MemoryStream ms = new MemoryStream(bytes);
-                return Image.FromStream(ms);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private void InitializeData()
-        {
-            string user = Environment.UserName;
-            if (string.IsNullOrEmpty(user))
-            {
-                user = Environment.MachineName;
-            }
-            _deviceName = "LetMeSee - " + user;
-            _localIp = GetLocalIPv4();
-        }
-
-        private string GetLocalIPv4()
-        {
-            try
-            {
-                foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus == OperationalStatus.Up &&
-                        (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
-                         ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet))
-                    {
-                        foreach (UnicastIPAddressInformation ip in ni.GetIPProperties().UnicastAddresses)
-                        {
-                            if (ip.Address.AddressFamily == AddressFamily.InterNetwork &&
-                                !ip.Address.ToString().StartsWith("127.") &&
-                                !ip.Address.ToString().StartsWith("169.254."))
-                            {
-                                return ip.Address.ToString() + " (" + ni.Name + ")";
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-            return "Nao identificado";
-        }
-
-        private void InitializeComponents()
-        {
-            // Janela Principal
-            this.Text = "LetMeSee - Espelho iOS";
-            this.Size = new Size(500, 430);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.BackColor = BgDark;
-            this.ForeColor = TextPrimary;
-            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            this.Icon = GetEmbeddedIcon();
-
-            // Cabecalho Escuro
-            _headerPanel = new Panel();
-            _headerPanel.Location = new Point(0, 0);
-            _headerPanel.Size = new Size(500, 78);
-            _headerPanel.BackColor = HeaderDark;
-
-            // Logo com o novo icone do radar
-            _logoBox = new PictureBox();
-            _logoBox.Location = new Point(20, 15);
-            _logoBox.Size = new Size(46, 46);
-            _logoBox.SizeMode = PictureBoxSizeMode.Zoom;
-            _logoBox.Image = GetEmbeddedImage();
-
-            _titleLabel = new Label();
-            _titleLabel.Text = "LETMESEE";
-            _titleLabel.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
-            _titleLabel.ForeColor = TextPrimary;
-            _titleLabel.Location = new Point(74, 15);
-            _titleLabel.AutoSize = true;
-
-            _subtitleLabel = new Label();
-            _subtitleLabel.Text = "Receptor de Espelhamento iOS via AirPlay";
-            _subtitleLabel.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
-            _subtitleLabel.ForeColor = TextSecondary;
-            _subtitleLabel.Location = new Point(76, 44);
-            _subtitleLabel.AutoSize = true;
-
-            _headerPanel.Controls.Add(_logoBox);
-            _headerPanel.Controls.Add(_titleLabel);
-            _headerPanel.Controls.Add(_subtitleLabel);
-
-            // Status Visual
-            _statusDot = new Label();
-            _statusDot.Text = "●";
-            _statusDot.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
-            _statusDot.ForeColor = StatusOff;
-            _statusDot.Location = new Point(22, 92);
-            _statusDot.Size = new Size(20, 25);
-
-            _statusLabel = new Label();
-            _statusLabel.Text = "Servico Desligado";
-            _statusLabel.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-            _statusLabel.ForeColor = TextSecondary;
-            _statusLabel.Location = new Point(46, 94);
-            _statusLabel.Size = new Size(350, 25);
-
-            // Botao Liga/Desliga Principal (Laranja Tático)
-            _toggleButton = new Button();
-            _toggleButton.Text = "▶  LIGAR ESPELHAMENTO";
-            _toggleButton.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _toggleButton.BackColor = TacticalOrange;
-            _toggleButton.ForeColor = Color.White;
-            _toggleButton.FlatStyle = FlatStyle.Flat;
-            _toggleButton.FlatAppearance.BorderSize = 0;
-            _toggleButton.Location = new Point(22, 128);
-            _toggleButton.Size = new Size(440, 48);
-            _toggleButton.Cursor = Cursors.Hand;
-            _toggleButton.Click += ToggleService;
-
-            // Card com Informacoes de Conexao
-            _cardPanel = new Panel();
-            _cardPanel.Location = new Point(22, 192);
-            _cardPanel.Size = new Size(440, 140);
-            _cardPanel.BackColor = CardBg;
-            _cardPanel.Paint += (s, e) =>
-            {
-                // Borda do card e detalhe laranja a esquerda
-                using (Pen borderPen = new Pen(CardBorder, 1))
-                {
-                    e.Graphics.DrawRectangle(borderPen, 0, 0, _cardPanel.Width - 1, _cardPanel.Height - 1);
-                }
-                using (SolidBrush orangeBar = new SolidBrush(TacticalOrange))
-                {
-                    e.Graphics.FillRectangle(orangeBar, 0, 0, 4, _cardPanel.Height);
-                }
+                if (sonar != null) sonar.Play(settings.EnableAnimation);
+                if (!string.IsNullOrEmpty(store.LastError)) Notify("As preferências não puderam ser lidas. Os valores padrão estão em uso.");
             };
-
-            _deviceTitleLabel = new Label();
-            _deviceTitleLabel.Text = "NOME QUE APARECE NO IPHONE:";
-            _deviceTitleLabel.Font = new Font("Segoe UI", 8f, FontStyle.Bold);
-            _deviceTitleLabel.ForeColor = TextSecondary;
-            _deviceTitleLabel.Location = new Point(16, 12);
-            _deviceTitleLabel.AutoSize = true;
-
-            _deviceValueLabel = new Label();
-            _deviceValueLabel.Text = _deviceName;
-            _deviceValueLabel.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
-            _deviceValueLabel.ForeColor = TacticalOrange;
-            _deviceValueLabel.Location = new Point(16, 30);
-            _deviceValueLabel.AutoSize = true;
-
-            _copyDeviceButton = new Button();
-            _copyDeviceButton.Text = "Copiar";
-            _copyDeviceButton.Font = new Font("Segoe UI", 8f, FontStyle.Regular);
-            _copyDeviceButton.BackColor = Color.FromArgb(42, 46, 56);
-            _copyDeviceButton.ForeColor = Color.White;
-            _copyDeviceButton.FlatStyle = FlatStyle.Flat;
-            _copyDeviceButton.FlatAppearance.BorderColor = CardBorder;
-            _copyDeviceButton.Location = new Point(356, 28);
-            _copyDeviceButton.Size = new Size(68, 26);
-            _copyDeviceButton.Cursor = Cursors.Hand;
-            _copyDeviceButton.Click += (s, e) =>
-            {
-                Clipboard.SetText(_deviceName);
-                _copyDeviceButton.Text = "Copiado!";
-                Timer t = new Timer { Interval = 1500 };
-                t.Tick += (ts, te) => { _copyDeviceButton.Text = "Copiar"; t.Stop(); };
-                t.Start();
-            };
-
-            _ipTitleLabel = new Label();
-            _ipTitleLabel.Text = "IP DO COMPUTADOR:";
-            _ipTitleLabel.Font = new Font("Segoe UI", 8f, FontStyle.Bold);
-            _ipTitleLabel.ForeColor = TextSecondary;
-            _ipTitleLabel.Location = new Point(16, 64);
-            _ipTitleLabel.AutoSize = true;
-
-            _ipValueLabel = new Label();
-            _ipValueLabel.Text = _localIp;
-            _ipValueLabel.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            _ipValueLabel.ForeColor = TextPrimary;
-            _ipValueLabel.Location = new Point(16, 82);
-            _ipValueLabel.AutoSize = true;
-
-            _instructionLabel = new Label();
-            _instructionLabel.Text = "💡 No iPhone: Central de Controle > [Espelhar Tela] > Escolha o nome acima.";
-            _instructionLabel.Font = new Font("Segoe UI", 8.5f, FontStyle.Italic);
-            _instructionLabel.ForeColor = Color.FromArgb(180, 185, 195);
-            _instructionLabel.Location = new Point(16, 110);
-            _instructionLabel.AutoSize = true;
-
-            _cardPanel.Controls.Add(_deviceTitleLabel);
-            _cardPanel.Controls.Add(_deviceValueLabel);
-            _cardPanel.Controls.Add(_copyDeviceButton);
-            _cardPanel.Controls.Add(_ipTitleLabel);
-            _cardPanel.Controls.Add(_ipValueLabel);
-            _cardPanel.Controls.Add(_instructionLabel);
-
-            // Rodape
-            _trayCheckBox = new CheckBox();
-            _trayCheckBox.Text = "Minimizar para a bandeja ao fechar";
-            _trayCheckBox.ForeColor = TextSecondary;
-            _trayCheckBox.Font = new Font("Segoe UI", 8.5f);
-            _trayCheckBox.Location = new Point(24, 345);
-            _trayCheckBox.Size = new Size(240, 24);
-            _trayCheckBox.Checked = true;
-
-            _firewallButton = new Button();
-            _firewallButton.Text = "Configurar Firewall";
-            _firewallButton.Font = new Font("Segoe UI", 8.5f);
-            _firewallButton.BackColor = Color.FromArgb(42, 46, 56);
-            _firewallButton.ForeColor = TextPrimary;
-            _firewallButton.FlatStyle = FlatStyle.Flat;
-            _firewallButton.FlatAppearance.BorderColor = CardBorder;
-            _firewallButton.Location = new Point(312, 343);
-            _firewallButton.Size = new Size(150, 28);
-            _firewallButton.Cursor = Cursors.Hand;
-            _firewallButton.Click += RunFirewallConfig;
-
-            // Adicionar componentes a janela
-            this.Controls.Add(_headerPanel);
-            this.Controls.Add(_statusDot);
-            this.Controls.Add(_statusLabel);
-            this.Controls.Add(_toggleButton);
-            this.Controls.Add(_cardPanel);
-            this.Controls.Add(_trayCheckBox);
-            this.Controls.Add(_firewallButton);
-
-            this.FormClosing += MainForm_FormClosing;
         }
 
-        private void InitializeTray()
+        private static Label TextLabel(string text, Font font, Color color, int width, int height)
         {
-            _trayMenu = new ContextMenuStrip();
-            ToolStripMenuItem openItem = new ToolStripMenuItem("Abrir LetMeSee", null, (s, e) => ShowWindow());
-            ToolStripMenuItem toggleItem = new ToolStripMenuItem("Ligar / Desligar", null, ToggleService);
-            ToolStripMenuItem exitItem = new ToolStripMenuItem("Sair do Programa", null, (s, e) => ForceExit());
-
-            _trayMenu.Items.Add(openItem);
-            _trayMenu.Items.Add(toggleItem);
-            _trayMenu.Items.Add(new ToolStripSeparator());
-            _trayMenu.Items.Add(exitItem);
-
-            _trayIcon = new NotifyIcon();
-            _trayIcon.Text = "LetMeSee - Espelho iOS";
-            _trayIcon.Icon = GetEmbeddedIcon();
-            _trayIcon.ContextMenuStrip = _trayMenu;
-            _trayIcon.Visible = true;
-            _trayIcon.DoubleClick += (s, e) => ShowWindow();
+            return new Label { Text = text, Font = font, ForeColor = color, AutoSize = false, Width = width, Height = height, BackColor = Color.Transparent };
         }
-
-        private void ToggleService(object sender, EventArgs e)
+        private static void Place(Control parent, Control child, int x, int y) { child.Location = new Point(x, y); parent.Controls.Add(child); }
+        private static ActionButton Button(string text, bool primary, int width, EventHandler action)
         {
-            if (_isRunning)
+            ActionButton button = new ActionButton(text, primary) { Width = width }; button.Click += action; return button;
+        }
+        private SurfacePanel Card(int height)
+        {
+            return new SurfacePanel { Height = height, Width = Math.Max(760, content.ClientSize.Width - 48), Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right };
+        }
+        private void BuildShell()
+        {
+            Panel sidebar = new Panel { Dock = DockStyle.Left, Width = 196, BackColor = DesignTokens.Surface };
+            Place(sidebar, TextLabel("LETMESEE", DesignTokens.Brand, DesignTokens.Text, 170, 36), 20, 30);
+            Place(sidebar, TextLabel("SUA TELA, POR PERTO.", DesignTokens.Fine, DesignTokens.Muted, 176, 28), 20, 67);
+            navigation = new ActionButton[3];
+            string[] pages = { "Espelhamento", "Diagnóstico", "Preferências" };
+            for (int i = 0; i < pages.Length; i++)
             {
-                StopService();
+                string page = pages[i];
+                navigation[i] = Button(page, false, 164, delegate { Navigate(page); });
+                navigation[i].TextAlign = ContentAlignment.MiddleLeft;
+                navigation[i].AccessibleDescription = "Abrir " + page;
+                Place(sidebar, navigation[i], 16, 132 + i * 52);
             }
+            Label local = TextLabel("RECEPÇÃO LOCAL\n\nSem conta.\nSem telemetria no app.\nVocê decide quando ligar.", DesignTokens.Small, DesignTokens.Muted, 158, 125);
+            local.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; Place(sidebar, local, 20, ClientSize.Height - 160);
+            Panel top = new Panel { Dock = DockStyle.Top, Height = 92 };
+            Place(top, TextLabel("Estação de espelhamento", DesignTokens.NavigationTitle, DesignTokens.Text, 420, 40), 24, 20);
+            status.Text = "○ Desligado"; status.ForeColor = DesignTokens.Muted; status.Size = new Size(240, 28);
+            status.TextAlign = ContentAlignment.MiddleRight; status.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            Place(top, status, ClientSize.Width - sidebar.Width - 264, 31);
+            footer.Dock = DockStyle.Bottom; footer.Height = 34; footer.Padding = new Padding(24, 6, 0, 0);
+            footer.Font = DesignTokens.Small; footer.ForeColor = DesignTokens.Muted;
+            footer.Text = "AirPlay para Windows · o receptor começa desligado";
+            content.Dock = DockStyle.Fill; content.AutoScroll = true;
+            Panel body = new Panel { Dock = DockStyle.Fill }; body.Controls.Add(content); body.Controls.Add(footer); body.Controls.Add(top);
+            Controls.Add(body); Controls.Add(sidebar);
+        }
+        private void BuildTray()
+        {
+            trayMenu = new ContextMenuStrip();
+            trayMenu.Items.Add("Abrir LetMeSee", null, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
+            trayMenu.Items.Add("Parar receptor", null, delegate { receiver.Stop(); });
+            trayMenu.Items.Add("Sair", null, delegate { forceClose = true; Close(); });
+            tray = new NotifyIcon { Icon = Icon, Text = "LetMeSee · desligado", Visible = true, ContextMenuStrip = trayMenu };
+            tray.DoubleClick += delegate { Show(); WindowState = FormWindowState.Normal; Activate(); };
+        }
+        private void Navigate(string page)
+        {
+            currentPage = page;
+            if (page == "Espelhamento") ShowMirror();
+            else if (page == "Diagnóstico") ShowDiagnostics();
+            else ShowPreferences();
+        }
+        private void ClearPage()
+        {
+            diagnosticGeneration++;
+            while (content.Controls.Count > 0) { Control control = content.Controls[0]; content.Controls.RemoveAt(0); control.Dispose(); }
+            toggle = null; message = null; elapsed = null; sonar = null; addresses = null;
+            for (int i = 0; i < navigation.Length; i++)
+            {
+                bool selected = navigation[i].Text == currentPage;
+                navigation[i].BackColor = selected ? DesignTokens.Raised : DesignTokens.Surface;
+                navigation[i].ForeColor = selected ? DesignTokens.Accent : DesignTokens.Muted;
+                navigation[i].FlatAppearance.BorderColor = selected ? DesignTokens.Accent : DesignTokens.Surface;
+            }
+        }
+        private void ShowMirror()
+        {
+            ClearPage();
+            SurfacePanel hero = Card(220); hero.BackColor = DesignTokens.Paper; hero.Paper = true;
+            Place(content, hero, 24, 0);
+            Place(hero, TextLabel("DO IPHONE PARA O SEU PC", DesignTokens.CaptionStrong, DesignTokens.Orange, 400, 28), 24, 22);
+            Place(hero, TextLabel("Sua tela.\nEm boa companhia.", DesignTokens.HeroTitle, DesignTokens.Ink, 460, 108), 22, 48);
+            Place(hero, TextLabel("Compartilhe uma ideia, apresente um app\nou veja tudo em uma tela maior.", DesignTokens.Body, DesignTokens.Ink, 440, 48), 24, 164);
+            sonar = new SonarPanel { Size = new Size(220, 200), Anchor = AnchorStyles.Right | AnchorStyles.Top };
+            Place(hero, sonar, hero.Width - 244, 10); sonar.Play(false);
+
+            SurfacePanel session = Card(112); Place(content, session, 24, 236);
+            message = TextLabel("Receptor desligado", DesignTokens.CardTitle, DesignTokens.Text, 450, 30); Place(session, message, 20, 16);
+            elapsed = TextLabel(settings.RequirePin ? "Código de conexão ativado · use uma rede privada." : "Sem código de conexão · use apenas uma rede de confiança.", DesignTokens.Small, DesignTokens.Muted, 445, 44); Place(session, elapsed, 20, 52);
+            toggle = Button("&Iniciar receptor", true, 220, ToggleReceiver); toggle.Height = 48;
+            toggle.Anchor = AnchorStyles.Right | AnchorStyles.Top; Place(session, toggle, session.Width - 240, 32);
+            tips.SetToolTip(toggle, "Anuncia este computador para dispositivos AirPlay na rede local. Alt+I para iniciar.");
+
+            SurfacePanel connection = Card(130); Place(content, connection, 24, 364);
+            Place(connection, TextLabel("NOME NO IPHONE", DesignTokens.Caption, DesignTokens.Muted, 280, 24), 20, 16);
+            Label name = TextLabel(settings.ReceiverName, DesignTokens.Name, DesignTokens.Text, 350, 40); name.AutoEllipsis = true;
+            Place(connection, name, 20, 44); tips.SetToolTip(name, settings.ReceiverName);
+            Place(connection, Button("&Copiar nome", false, 140, delegate { CopyName(); }), 20, 84);
+            Place(connection, TextLabel("REDE DO COMPUTADOR", DesignTokens.Caption, DesignTokens.Muted, 340, 24), 404, 16);
+            addresses = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 312, BackColor = DesignTokens.Raised, ForeColor = DesignTokens.Text, AccessibleName = "Endereços locais disponíveis" };
+            Place(connection, addresses, 404, 46);
+            Place(connection, Button("Atualizar rede", false, 148, delegate { RefreshNetwork(); }), 404, 84);
+            RefreshNetwork();
+
+            SurfacePanel guide = Card(112); Place(content, guide, 24, 510);
+            string[] steps = { "01  Conectar", "02  Espelhar", "03  Selecionar" };
+            string[] detail = { "iPhone e PC na mesma\nrede Wi-Fi de confiança.", "Abra a Central de Controle\ne toque em Espelhar a Tela.", "Escolha o nome do receptor.\nA imagem abre em outra janela." };
+            for (int i = 0; i < 3; i++)
+            {
+                Place(guide, TextLabel(steps[i], DesignTokens.Step, DesignTokens.Accent, 230, 28), 20 + i * 248, 16);
+                Place(guide, TextLabel(detail[i], DesignTokens.Small, DesignTokens.Muted, 232, 52), 20 + i * 248, 48);
+            }
+            UpdateState();
+        }
+        private void RefreshNetwork()
+        {
+            if (addresses == null) return;
+            addresses.Items.Clear();
+            foreach (NetworkAddress address in NetworkService.GetActiveIPv4()) addresses.Items.Add(address.Address + " · " + address.Name);
+            if (addresses.Items.Count == 0) addresses.Items.Add("Nenhuma rede local ativa");
+            addresses.SelectedIndex = 0;
+            tips.SetToolTip(addresses, "Lista de endereços para conferência. O UxPlay anuncia nas interfaces disponíveis; esta lista não restringe o acesso.");
+        }
+        private void ToggleReceiver(object sender, EventArgs e)
+        {
+            if (receiver.HasOwnedProcess || receiver.State == ReceiverState.Starting) receiver.Stop();
             else
             {
-                StartService();
+                receiver.Start(settings.Clone());
             }
         }
-
-        private void StartService()
+        private void ReceiverChanged(object sender, ReceiverStateChangedEventArgs e)
         {
-            string appDir = AppDomain.CurrentDomain.BaseDirectory;
-            string binDir = Path.Combine(appDir, "bin");
-            string uxplayExe = Path.Combine(binDir, "uxplay.exe");
-
-            if (!File.Exists(uxplayExe))
+            if (disposed || IsDisposed || !IsHandleCreated) return;
+            try { BeginInvoke(new Action(UpdateState)); } catch (InvalidOperationException) { }
+        }
+        private void UpdateState()
+        {
+            bool running = receiver.State == ReceiverState.Running;
+            bool starting = receiver.State == ReceiverState.Starting;
+            if (running && !startedAt.HasValue) startedAt = DateTime.UtcNow;
+            if (!running) startedAt = null;
+            status.Text = running ? "● Receptor ativo" : starting ? "◌ Verificando motor" : receiver.State == ReceiverState.Error ? "! Atenção" : "○ Desligado";
+            status.ForeColor = running ? DesignTokens.Success : receiver.State == ReceiverState.Error ? DesignTokens.Danger : DesignTokens.Muted;
+            tray.Text = running ? "LetMeSee · receptor ativo" : starting ? "LetMeSee · iniciando" : receiver.HasOwnedProcess ? "LetMeSee · conferir encerramento" : "LetMeSee · desligado";
+            if (toggle != null)
             {
-                string downloadScript = Path.Combine(appDir, "scripts\\download_deps.ps1");
-                if (File.Exists(downloadScript))
-                {
-                    DialogResult dr = MessageBox.Show(
-                        "Os arquivos do motor de espelhamento ainda nao foram baixados.\n\nDeseja realizar o download automatico agora?",
-                        "LetMeSee - Dependencias",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-
-                    if (dr == DialogResult.Yes)
-                    {
-                        ProcessStartInfo psiDl = new ProcessStartInfo();
-                        psiDl.FileName = "powershell.exe";
-                        psiDl.Arguments = "-NoProfile -ExecutionPolicy Bypass -File \"" + downloadScript + "\"";
-                        psiDl.UseShellExecute = true;
-                        Process pDl = Process.Start(psiDl);
-                        pDl.WaitForExit();
-
-                        if (!File.Exists(uxplayExe))
-                        {
-                            MessageBox.Show("O download nao foi concluido. Verifique sua conexao com a internet.", "LetMeSee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        return;
-                    }
-                }
-                else
-                {
-                    MessageBox.Show("Executavel nao encontrado em:\n" + uxplayExe, "LetMeSee - Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
+                toggle.Text = receiver.HasOwnedProcess || starting ? "&Parar receptor" : "&Iniciar receptor";
+                toggle.AccessibleName = toggle.Text.Replace("&", "");
+                message.Text = running ? "Pronto para receber" : starting ? "Conferindo arquivos do motor…" : receiver.State == ReceiverState.Error ? "O receptor precisa de atenção" : "Receptor desligado";
+                message.ForeColor = receiver.State == ReceiverState.Error ? DesignTokens.Danger : DesignTokens.Text;
+                elapsed.Text = running && settings.RequirePin ? "Código AirPlay: " + receiver.SessionPin + " · digite no iPhone ao conectar." : receiver.State == ReceiverState.Stopped ? (settings.RequirePin ? "Código de conexão ativado · use uma rede privada." : "Sem código de conexão · use apenas uma rede de confiança.") : receiver.StatusMessage;
             }
+            footer.Text = running ? "Receptor ativo · disponibilidade não confirma um iPhone conectado" : receiver.HasOwnedProcess ? "Atenção: confira o encerramento do motor antes de sair." : "AirPlay para Windows · recepção sob seu controle";
+            if (currentPage == "Preferências") ShowPreferences();
+        }
+        private void TickClock(object sender, EventArgs e)
+        {
+            if (!startedAt.HasValue) return;
+            TimeSpan duration = DateTime.UtcNow - startedAt.Value;
+            if (elapsed != null) elapsed.Text = (settings.RequirePin ? "Código AirPlay: " + receiver.SessionPin + " · " : "Sem PIN · ") + "Ativo há " + duration.ToString(@"hh\:mm\:ss") + " · " + (settings.SessionLimitMinutes == 0 ? "sem limite" : "limite de " + settings.SessionLimitMinutes + " min");
+        }
+        private void CopyName()
+        {
+            try { Clipboard.SetText(settings.ReceiverName); Notify("Nome do receptor copiado."); }
+            catch (System.Runtime.InteropServices.ExternalException) { Notify("A área de transferência está ocupada. Tente novamente."); }
+        }
+        private void Notify(string text) { footer.Text = text; }
 
+        private void ShowDiagnostics()
+        {
+            ClearPage();
+            Place(content, TextLabel("Vamos conferir a conexão.", DesignTokens.Heading, DesignTokens.Text, 700, 48), 24, 4);
+            Place(content, TextLabel("Verificações locais. Nenhuma informação é enviada.", DesignTokens.Body, DesignTokens.Muted, 700, 32), 24, 60);
+            SurfacePanel card = Card(276); Place(content, card, 24, 112);
+            Label report = TextLabel("Conferindo motor, rede e descoberta…", DesignTokens.Body, DesignTokens.Text, 700, 230); Place(card, report, 20, 20);
+            ActionButton refresh = Button("Verificar de novo", false, 190, delegate { ShowDiagnostics(); }); refresh.Enabled = false; Place(content, refresh, 24, 408);
+            Place(content, Button("Configurar firewall…", false, 220, ConfigureFirewall), 230, 408);
+            Place(content, TextLabel("O firewall aceita apenas rede Privada e sub-rede local. A configuração pede\npermissão de administrador. O aplicativo e o diagnóstico não precisam dela.\n\nSe o PC não aparecer: confira a mesma rede, o isolamento de clientes no Wi-Fi,\na descoberta Bonjour e se a VPN permite acesso à rede local.", DesignTokens.Body, DesignTokens.Muted, 750, 152), 24, 476);
+            int generation = diagnosticGeneration;
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.DoWork += delegate(object sender, DoWorkEventArgs args) { args.Result = DiagnosticService.Inspect(appDirectory); };
+            worker.RunWorkerCompleted += delegate(object sender, RunWorkerCompletedEventArgs args)
+            {
+                worker.Dispose();
+                if (disposed || generation != diagnosticGeneration || report.IsDisposed) return;
+                refresh.Enabled = true;
+                if (args.Error != null) { report.Text = "Não foi possível concluir a verificação. Tente novamente."; return; }
+                DiagnosticReport result = (DiagnosticReport)args.Result;
+                report.Text = "MOTOR AIRPLAY\n" + result.Runtime + "\n\nREDE LOCAL\n" + result.Network + "\n\nDESCOBERTA BONJOUR\n" + result.Bonjour;
+            };
+            worker.RunWorkerAsync();
+        }
+        private void ConfigureFirewall(object sender, EventArgs e)
+        {
+            string script = Path.Combine(appDirectory, "scripts\\setup_firewall.ps1");
+            if (!File.Exists(script)) { Notify("Script de firewall ausente. Reinstale a partir de uma versão verificada."); return; }
+            if (MessageBox.Show(this, "Permitir que este receptor receba conexões de dispositivos da sub-rede local, apenas em redes marcadas como Privadas no Windows?", "Configurar firewall", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
             try
             {
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = uxplayExe;
-                psi.Arguments = "-n \"" + _deviceName + "\" -p -vs d3d11videosink";
-                psi.CreateNoWindow = true;
-                psi.UseShellExecute = false;
-                psi.WorkingDirectory = binDir;
-
-                string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-                string newPath = binDir + ";" + Path.Combine(binDir, "bin") + ";" + currentPath;
-                psi.EnvironmentVariables["PATH"] = newPath;
-                psi.EnvironmentVariables["GST_PLUGIN_PATH"] = Path.Combine(binDir, "lib\\gstreamer-1.0");
-
-                _mirrorProcess = new Process();
-                _mirrorProcess.StartInfo = psi;
-                _mirrorProcess.EnableRaisingEvents = true;
-                _mirrorProcess.Exited += (s, e) =>
+                string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
+                Process operation = new Process();
+                operation.StartInfo = new ProcessStartInfo(powershell, "-NoProfile -ExecutionPolicy RemoteSigned -File \"" + script + "\"") { UseShellExecute = true, Verb = "runas", WorkingDirectory = appDirectory };
+                operation.EnableRaisingEvents = true;
+                operation.Exited += delegate
                 {
-                    this.BeginInvoke(new Action(() =>
-                    {
-                        if (_isRunning)
-                        {
-                            SetUIState(false);
-                        }
-                    }));
+                    int exitCode = operation.ExitCode; operation.Dispose();
+                    if (disposed || !IsHandleCreated) return;
+                    try { BeginInvoke(new Action(delegate { Notify(exitCode == 0 ? "Regras de rede privada configuradas. Confira o Diagnóstico." : "A configuração do firewall falhou. Execute configurar_firewall.bat para ver os detalhes."); })); }
+                    catch (InvalidOperationException) { }
                 };
-
-                _mirrorProcess.Start();
-                SetUIState(true);
+                try { operation.Start(); } catch { operation.Dispose(); throw; }
+                Notify("Aguardando a configuração do firewall…");
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Falha ao iniciar o servico:\n" + ex.Message, "LetMeSee - Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetUIState(false);
-            }
+            catch (Win32Exception) { Notify("A configuração não foi iniciada. Você pode tentar novamente quando precisar."); }
         }
-
-        private void StopService()
+        private void ShowPreferences()
         {
-            try
+            ClearPage();
+            Place(content, TextLabel("Do seu jeito.", DesignTokens.Heading, DesignTokens.Text, 700, 48), 24, 4);
+            Place(content, TextLabel("Preferências salvas somente neste usuário do Windows.", DesignTokens.Body, DesignTokens.Muted, 700, 32), 24, 60);
+            SurfacePanel card = Card(476); Place(content, card, 24, 108);
+            bool busy = receiver.HasOwnedProcess || receiver.State == ReceiverState.Starting;
+            Place(card, TextLabel("Nome que aparece no iPhone", DesignTokens.Step, DesignTokens.Text, 600, 28), 20, 20);
+            TextBox name = new TextBox { Text = settings.ReceiverName, MaxLength = 48, Width = 460, BackColor = DesignTokens.Raised, ForeColor = DesignTokens.Text, BorderStyle = BorderStyle.FixedSingle, AccessibleName = "Nome do receptor" }; Place(card, name, 20, 56);
+            Place(card, TextLabel("Use um nome de 1 a 48 caracteres. Evite dados pessoais.", DesignTokens.Small, DesignTokens.Muted, 660, 32), 20, 92);
+            CheckBox pin = Preference("Exigir código AirPlay de sessão ao conectar", settings.RequirePin); Place(card, pin, 20, 140);
+            CheckBox mute = Preference("Silenciar o áudio recebido", settings.Mute); Place(card, mute, 20, 184);
+            CheckBox minimize = Preference("Continuar na bandeja ao fechar a janela", settings.MinimizeToTray); Place(card, minimize, 20, 228);
+            CheckBox animation = Preference("Animar o radar ao abrir o aplicativo", settings.EnableAnimation); Place(card, animation, 20, 272);
+            Place(card, TextLabel("Desligar automaticamente após", DesignTokens.Body, DesignTokens.Text, 400, 28), 20, 336);
+            ComboBox limit = new ComboBox { Width = 220, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Limite de tempo da sessão" };
+            limit.Items.AddRange(new object[] { "Sem limite", "15 minutos", "30 minutos", "60 minutos" });
+            int[] values = { 0, 15, 30, 60 }; limit.SelectedIndex = Array.IndexOf(values, settings.SessionLimitMinutes); Place(card, limit, 20, 372);
+            Label feedback = TextLabel(busy ? "Pare o receptor para alterar as preferências." : "As alterações serão usadas na próxima sessão.", DesignTokens.Small, DesignTokens.Muted, 700, 32); Place(card, feedback, 20, 428);
+            name.Enabled = pin.Enabled = mute.Enabled = minimize.Enabled = animation.Enabled = limit.Enabled = !busy;
+            ActionButton save = Button("&Salvar preferências", true, 228, delegate
             {
-                if (_mirrorProcess != null && !_mirrorProcess.HasExited)
-                {
-                    _mirrorProcess.Kill();
-                    _mirrorProcess.WaitForExit(2000);
-                }
-            }
-            catch { }
-            finally
-            {
-                _mirrorProcess = null;
-                SetUIState(false);
-            }
+                AppSettings updated = new AppSettings { ReceiverName = name.Text.Trim(), RequirePin = pin.Checked, Mute = mute.Checked, MinimizeToTray = minimize.Checked, EnableAnimation = animation.Checked, SessionLimitMinutes = values[limit.SelectedIndex] };
+                string error;
+                if (!updated.Validate(out error)) { feedback.Text = error; feedback.ForeColor = DesignTokens.Danger; name.Focus(); return; }
+                if (store.Save(updated)) { settings = updated; feedback.Text = "Preferências salvas."; feedback.ForeColor = DesignTokens.Success; }
+                else { feedback.Text = store.LastError; feedback.ForeColor = DesignTokens.Danger; }
+            });
+            save.Enabled = !busy; Place(content, save, 24, 604);
         }
-
-        private void SetUIState(bool running)
+        private static CheckBox Preference(string text, bool value)
         {
-            _isRunning = running;
-            if (running)
-            {
-                _statusDot.ForeColor = SonarGreen; // Verde Radar
-                _statusLabel.Text = "Ativo - Aguardando conexao do iPhone";
-                _statusLabel.ForeColor = SonarGreen;
-
-                _toggleButton.Text = "⏹  DESLIGAR ESPELHAMENTO";
-                _toggleButton.BackColor = Color.FromArgb(42, 46, 56);
-                _toggleButton.ForeColor = Color.FromArgb(235, 99, 56);
-
-                _trayIcon.Text = "LetMeSee - Ativo (" + _deviceName + ")";
-            }
-            else
-            {
-                _statusDot.ForeColor = StatusOff;
-                _statusLabel.Text = "Servico Desligado";
-                _statusLabel.ForeColor = TextSecondary;
-
-                _toggleButton.Text = "▶  LIGAR ESPELHAMENTO";
-                _toggleButton.BackColor = TacticalOrange;
-                _toggleButton.ForeColor = Color.White;
-
-                _trayIcon.Text = "LetMeSee - Desligado";
-            }
+            return new CheckBox { Text = text, Checked = value, Width = 670, Height = 36, ForeColor = DesignTokens.Text, AccessibleName = text };
         }
-
-        private void RunFirewallConfig(object sender, EventArgs e)
+        private void ClosingRequested(object sender, FormClosingEventArgs e)
         {
-            string appDir = AppDomain.CurrentDomain.BaseDirectory;
-            string bat = Path.Combine(appDir, "configurar_firewall.bat");
-            if (File.Exists(bat))
+            if (!forceClose && settings.MinimizeToTray && e.CloseReason == CloseReason.UserClosing)
             {
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = bat;
-                psi.UseShellExecute = true;
-                psi.Verb = "runas";
-                try
-                {
-                    Process.Start(psi);
-                }
-                catch { }
+                e.Cancel = true; Hide(); tray.ShowBalloonTip(2500, "LetMeSee", "O aplicativo continua na bandeja. Use Sair para encerrá-lo.", ToolTipIcon.Info); return;
             }
-            else
-            {
-                MessageBox.Show("Arquivo 'configurar_firewall.bat' nao encontrado.", "LetMeSee", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            receiver.Stop();
+            if (receiver.HasOwnedProcess || receiver.State == ReceiverState.Starting)
+            { e.Cancel = true; Show(); Notify("Não foi possível parar o motor. Tente novamente antes de sair."); }
         }
-
-        private void ShowWindow()
+        protected override void Dispose(bool disposing)
         {
-            this.Show();
-            this.WindowState = FormWindowState.Normal;
-            this.BringToFront();
-        }
-
-        private void ForceExit()
-        {
-            _forceClose = true;
-            StopService();
-            if (_trayIcon != null)
+            if (disposing && !disposed)
             {
-                _trayIcon.Visible = false;
-                _trayIcon.Dispose();
+                disposed = true; receiver.StateChanged -= ReceiverChanged; receiver.Dispose(); clock.Dispose(); tips.Dispose();
+                if (tray != null) { tray.Visible = false; tray.Dispose(); }
+                if (trayMenu != null) trayMenu.Dispose();
             }
-            Application.Exit();
-        }
-
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            if (!_forceClose && _trayCheckBox.Checked && e.CloseReason == CloseReason.UserClosing)
-            {
-                e.Cancel = true;
-                this.Hide();
-                _trayIcon.ShowBalloonTip(2000, "LetMeSee", "O aplicativo continua ativo na bandeja do sistema.", ToolTipIcon.Info);
-            }
-            else
-            {
-                StopService();
-                if (_trayIcon != null)
-                {
-                    _trayIcon.Visible = false;
-                    _trayIcon.Dispose();
-                }
-            }
+            base.Dispose(disposing);
         }
     }
 }

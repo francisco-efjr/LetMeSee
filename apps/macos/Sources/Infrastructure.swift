@@ -180,12 +180,12 @@ enum SettingsStore {
     init() {
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification] {
             let token = NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.systemChanged("O Mac suspendeu ou retomou. Confira o ambiente novamente.") }
+                Task { @MainActor [weak self] in self?.systemChanged("O Mac suspendeu ou retomou. Confira o ambiente novamente.") }
             }
             observers.append(token)
         }
         pathMonitor.pathUpdateHandler = { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 if !self.observedFirstPath { self.observedFirstPath = true; return }
                 if self.configuration.method == .airPlay || self.configuration.method == .androidWiFi {
@@ -333,7 +333,7 @@ enum SettingsStore {
                 process.standardError = FileHandle.nullDevice
                 process.standardInput = FileHandle.nullDevice
                 process.terminationHandler = { [weak self] terminated in
-                    Task { @MainActor in
+                    Task { @MainActor [weak self] in
                         guard let self, self.scrcpyProcess === terminated else { return }
                         self.scrcpyProcess = nil
                         self.activity = .idle
@@ -351,7 +351,7 @@ enum SettingsStore {
             } else {
                 guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.QuickTimePlayerX") else { throw LocalError.message("O QuickTime não está disponível. Confira o checklist.") }
                 NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
-                    if let error { Task { @MainActor in self?.activity = .idle; self?.confirmations = []; self?.message = "Não foi possível abrir o QuickTime: \(error.localizedDescription)" } }
+                    if let error { Task { @MainActor [weak self] in self?.activity = .idle; self?.confirmations = []; self?.message = "Não foi possível abrir o QuickTime: \(error.localizedDescription)" } }
                 }
                 activity = .quickTimeGuidance
                 message = "No QuickTime: Arquivo → Nova Gravação de Filme → menu ao lado de Gravar → escolha seu iPhone. A prévia dispensa gravação. Feche a prévia no QuickTime para parar; este app não detecta a sessão."

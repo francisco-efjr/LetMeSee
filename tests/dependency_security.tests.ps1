@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts/dependency_security.ps1')
+Add-Type -AssemblyName System.IO.Compression -ErrorAction Stop
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $script:passed = 0
 $testRoot = Join-Path $PSScriptRoot ('.security-tests-' + [Guid]::NewGuid().ToString('N'))
@@ -24,11 +25,21 @@ function Test-Case {
 }
 
 function New-TestArchive {
-    param([string[]]$Names, [string]$Content = 'test content', [switch]$SymbolicLink)
-    $path = Join-Path $testRoot ([Guid]::NewGuid().ToString('N') + '.zip')
-    $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew)
-    $archive = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Create, $false)
+    param(
+        [string[]]$Names,
+        [string]$Content = 'test content',
+        [switch]$SymbolicLink,
+        [string]$Path = (Join-Path $testRoot ([Guid]::NewGuid().ToString('N') + '.zip')),
+        [scriptblock]$ArchiveFactory = {
+            param($FileStream)
+            New-Object IO.Compression.ZipArchive($FileStream, [IO.Compression.ZipArchiveMode]::Create, $false)
+        }
+    )
+    $stream = $null
+    $archive = $null
     try {
+        $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew)
+        $archive = & $ArchiveFactory $stream
         foreach ($name in $Names) {
             $entry = $archive.CreateEntry($name)
             if ($SymbolicLink) { $entry.ExternalAttributes = -1610612736 } # Unix symlink mode: 0xA0000000
@@ -38,8 +49,19 @@ function New-TestArchive {
                 $entryStream.Write($bytes, 0, $bytes.Length)
             } finally { $entryStream.Dispose() }
         }
-    } finally { $archive.Dispose(); $stream.Dispose() }
-    return $path
+    } finally {
+        try { if ($null -ne $archive) { $archive.Dispose() } }
+        finally { if ($null -ne $stream) { $stream.Dispose() } }
+    }
+    return $Path
+}
+
+function Assert-FileReleased {
+    param([string]$Path)
+    # FileShare.None fails on Windows if a previous reader/writer was leaked.
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try { if (-not $stream.CanRead) { throw 'Unable to reopen the archive.' } }
+    finally { $stream.Dispose() }
 }
 
 function New-TestRuntime {
@@ -86,10 +108,21 @@ try {
         Assert-Throws { Assert-FileHash -Path $path -Expected $hash }
         Assert-Throws { Assert-FileHash -Path $path -Expected '' }
     }
+    Test-Case 'ZIP fixture releases its file if archive construction fails' {
+        $path = Join-Path $testRoot 'constructor-failure.zip'
+        $message = $null
+        try {
+            New-TestArchive -Names @('uxplay.exe') -Path $path -ArchiveFactory { throw 'Simulated archive constructor failure.' }
+        } catch { $message = $_.Exception.Message }
+        if ($message -ne 'Simulated archive constructor failure.') { throw 'Archive construction did not preserve the original failure.' }
+        Assert-FileReleased -Path $path
+    }
     Test-Case 'Safe ZIP extracts into staging and verifies complete manifest' {
         $zip = New-TestArchive -Names @('uxplay.exe', 'lib/gstreamer-1.0/plugin.dll')
         $destination = Join-Path $testRoot 'good-extraction'
+        Assert-FileReleased -Path $zip
         Expand-VerifiedArchive -ArchivePath $zip -DestinationPath $destination
+        Assert-FileReleased -Path $zip
         Write-RuntimeManifest -RuntimeDirectory $destination
         Assert-RuntimeIntegrity -RuntimeDirectory $destination
         if ((Get-Content -LiteralPath (Join-Path $destination 'runtime-files.sha256')).Count -ne 2) { throw 'Manifest coverage is incomplete.' }
@@ -100,12 +133,14 @@ try {
             $zip = New-TestArchive -Names @('uxplay.exe', $name)
             $destination = Join-Path $testRoot ([Guid]::NewGuid().ToString('N'))
             Assert-Throws { Expand-VerifiedArchive -ArchivePath $zip -DestinationPath $destination }
+            Assert-FileReleased -Path $zip
             if (Test-Path -LiteralPath $destination) { throw ('Content was extracted before validation: ' + $name) }
         }
     }
     Test-Case 'ZIP duplicate paths are rejected case-insensitively' {
         $zip = New-TestArchive -Names @('uxplay.exe', 'UXPLAY.EXE')
         Assert-Throws { Expand-VerifiedArchive -ArchivePath $zip -DestinationPath (Join-Path $testRoot 'duplicate') }
+        Assert-FileReleased -Path $zip
     }
     Test-Case 'ZIP file/directory collisions and supplied manifests are rejected' {
         foreach ($names in @(@('uxplay.exe', 'lib', 'lib/plugin.dll'), @('uxplay.exe', 'runtime-files.sha256'))) {

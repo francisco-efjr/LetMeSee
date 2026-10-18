@@ -22,12 +22,18 @@ jobs:
         run: zsh apps/macos/test.sh
       - name: Compile the native app
         run: zsh apps/macos/build.sh
-      - name: Archive local review build
-        run: ditto -c -k --sequesterRsrc --keepParent apps/macos/build/LetMeSee.app apps/macos/build/LetMeSee-macOS-review.zip
+      - name: Archive unsigned application and compute checksum
+        working-directory: apps/macos/build
+        run: |
+          package="LetMeSee-1.2.0-macos-$(uname -m).zip"
+          ditto -c -k --sequesterRsrc --keepParent LetMeSee.app "$package"
+          shasum -a 256 "$package" > SHA256SUMS-macos.txt
       - name: Upload unsigned review artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: LetMeSee-macOS-review
-          path: apps/macos/build/LetMeSee-macOS-review.zip
+          path: |
+            apps/macos/build/LetMeSee-1.2.0-macos-*.zip
+            apps/macos/build/SHA256SUMS-macos.txt
           if-no-files-found: error
           retention-days: 14

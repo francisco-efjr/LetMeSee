@@ -13,6 +13,8 @@ O pacote mantido pelo projeto foi baixado e seu SHA-256 calculado em 2026-10-15.
 
 O ZIP legado não contém `LICENSE`, `COPYING` ou um inventário completo de licenças. **A distribuição pública do instalador depende de completar o inventário, avisos e fontes correspondentes**, além dos testes nativos. O pipeline desta branch não publica releases. Não se deve interpretar este documento como uma licença concedida pelos autores dos componentes.
 
+A pré-release 1.2.0 distribui somente o aplicativo e seus scripts/configurações. O ZIP portátil Windows **não contém** `bin/`, `engines/`, UxPlay, GStreamer, Bonjour MSI, adb ou scrcpy. Os componentes opcionais continuam separados e exigem preparação explícita no checklist. O CI não gera o instalador completo enquanto o inventário de distribuição estiver pendente.
+
 ## Identidade visual
 
 A paleta é inspirada na [referência de Pulse fornecida pelo usuário](https://steamcommunity.com/sharedfiles/filedetails/?id=1408618718). A textura e o radar da interface foram desenhados em código; a arte GIF do Steam e o anexo comercial não são distribuídos no produto. O ícone anterior do projeto foi preservado.

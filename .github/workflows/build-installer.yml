@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: Security tests, GUI and offline installer
+    name: Windows tests, GUI and portable package
     runs-on: windows-2022
     timeout-minutes: 25
     defaults:
@@ -32,20 +32,23 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           & .\tests\dependency_security.tests.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Dependency security tests failed.' }
+          if (-not $?) { throw 'Dependency security tests failed.' }
 
       - name: Test application core
         run: |
           $ErrorActionPreference = 'Stop'
           & .\tests\run-core-tests.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
+          if (-not $?) { throw 'Core tests failed.' }
 
       - name: Test preparation matrix and Android package boundaries
         run: |
           $ErrorActionPreference = 'Stop'
           & .\tests\run-preparation-tests.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Preparation tests failed.' }
+          if (-not $?) { throw 'Preparation tests failed.' }
           & .\tests\android-package.tests.ps1
+          if (-not $?) { throw 'Android package tests failed.' }
+          & .\tests\windows-package.tests.ps1
+          if (-not $?) { throw 'Windows package tests failed.' }
 
       - name: Check design token contrast and preview JavaScript syntax
         run: |
@@ -72,55 +75,18 @@ jobs:
         shell: cmd
         run: call build_ui.bat
 
-      - name: Prepare pinned runtime explicitly
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & .\scripts\download_deps.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime preparation failed.' }
-          . .\scripts\dependency_security.ps1
-          Assert-RuntimeIntegrity -RuntimeDirectory (Join-Path $PWD 'bin')
-
-      - name: Install SHA256-pinned Inno Setup compiler
-        run: |
-          $ErrorActionPreference = 'Stop'
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.0.exe'
-          Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_0/innosetup-6.7.0.exe' -OutFile $installer
-          $expected = 'f45c7d68d1e660cf13877ec36738a5179ce72a33414f9959d35e99b68c52a697'
-          if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $expected) { throw 'Inno Setup SHA256 mismatch.' }
-          $toolDirectory = Join-Path $env:RUNNER_TEMP 'letmesee-inno'
-          $process = Start-Process -FilePath $installer -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="' + $toolDirectory + '"') -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw ('Inno Setup installation failed: ' + $process.ExitCode) }
-
-      - name: Compile offline installer and package portable build
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & (Join-Path $env:RUNNER_TEMP 'letmesee-inno\ISCC.exe') 'installer\setup.iss'
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath 'dist\LetMeSee-Setup.exe')) { throw 'Installer compilation failed.' }
-          $package = Join-Path $env:RUNNER_TEMP 'LetMeSee-portable'
-          New-Item -ItemType Directory -Path $package | Out-Null
-          foreach ($item in @('LetMeSee.exe', 'bin', 'scripts', 'config', 'iniciar.bat', 'configurar_firewall.bat', 'diagnostico.bat', 'README.md', 'SECURITY.md', 'THIRD_PARTY.md')) {
-            Copy-Item -LiteralPath $item -Destination $package -Recurse
-          }
-          Copy-Item -LiteralPath 'installer\app_icon.ico' -Destination (Join-Path $package 'app_icon.ico')
-          Compress-Archive -Path (Join-Path $package '*') -DestinationPath 'dist\LetMeSee-portable.zip' -CompressionLevel Optimal
-          $checksums = foreach ($file in @(Get-ChildItem -LiteralPath 'dist' -File | Sort-Object Name)) {
-            (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $file.Name
-          }
-          [IO.File]::WriteAllLines((Join-Path $PWD 'dist\SHA256SUMS.txt'), $checksums, (New-Object Text.UTF8Encoding($false)))
-          Copy-Item -LiteralPath 'bin\runtime-files.sha256' -Destination 'dist\runtime-files.sha256'
+      - name: Package application without third-party runtimes
+        run: .\scripts\package_windows.ps1 -Version 1.2.0
 
       - name: Upload review artifacts and checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: LetMeSee-windows-review-${{ github.run_number }}
+          name: LetMeSee-windows-x64-portable-${{ github.run_number }}
           path: |
-            dist/LetMeSee-Setup.exe
-            dist/LetMeSee-portable.zip
-            dist/SHA256SUMS.txt
-            dist/runtime-files.sha256
+            dist/LetMeSee-1.2.0-windows-x64-portable.zip
+            dist/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: 14
 
-      # Distribution is deliberately a separate, reviewed process. This workflow
-      # has no write token, release mutation, clobber, or swallowed build failures.
+      # Publishing remains a separate action after reviewing this commit's builds.
+      # Native third-party runtimes are excluded pending their distribution inventory.

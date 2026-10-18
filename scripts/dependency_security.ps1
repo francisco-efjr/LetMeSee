@@ -68,6 +68,8 @@ function Get-SafeChildPath {
 
 function Expand-VerifiedArchive {
     param([Parameter(Mandatory = $true)][string]$ArchivePath, [Parameter(Mandatory = $true)][string]$DestinationPath)
+    # Windows PowerShell 5.1 does not preload ZipArchive's assembly.
+    Add-Type -AssemblyName System.IO.Compression -ErrorAction Stop
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
     if (Test-Path -LiteralPath $DestinationPath) { throw 'Extraction requires a new empty staging directory.' }
     Assert-NoReparsePath -Path $DestinationPath
@@ -111,9 +113,10 @@ function Expand-VerifiedArchive {
                 continue
             }
             [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target))
-            $entryStream = $entry.Open()
+            $entryStream = $null
             $output = $null
             try {
+                $entryStream = $entry.Open()
                 $output = New-Object IO.FileStream($target, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
                 [long]$written = 0
                 while (($count = $entryStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
@@ -123,8 +126,8 @@ function Expand-VerifiedArchive {
                 }
                 if ($written -ne $entry.Length) { throw 'Archive entry is truncated.' }
             } finally {
-                if ($null -ne $output) { $output.Dispose() }
-                $entryStream.Dispose()
+                try { if ($null -ne $output) { $output.Dispose() } }
+                finally { if ($null -ne $entryStream) { $entryStream.Dispose() } }
             }
         }
     } finally { $zip.Dispose() }

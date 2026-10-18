@@ -2,6 +2,12 @@
 
 Espelhamento de **Android, iPhone e iPad** no **Windows ou macOS**, com preparação guiada antes de abrir a sessão. Depois do checklist, a tela principal tem somente duas ações: **Ambiente** e **Começar a espelhar**.
 
+## Download para avaliação
+
+A [pré-release 1.2.0-rc.1](https://github.com/francisco-efjr/LetMeSee/releases/tag/v1.2.0-rc.1) oferece o aplicativo compilado, sem precisar compilar o código no Windows. Baixe `LetMeSee-1.2.0-windows-x64-portable.zip`, confira o SHA-256 publicado e siga o `LEIA-ME-WINDOWS.txt` incluído. Extraia em uma pasta do seu usuário e abra `LetMeSee.exe`.
+
+Esse pacote não inclui os motores de terceiros; o checklist orienta sua preparação explícita. É uma versão de avaliação sem assinatura de distribuição. As pendências de aparelhos físicos e instalador completo estão em [validação](docs/qa/VALIDACAO.md).
+
 ![Prévia visual do fluxo](docs/design/preview.png)
 
 > A captura documenta a demonstração no navegador. Há aplicações nativas separadas: C#/WinForms no Windows e SwiftUI no macOS. As rotas Apple no Mac orientam o uso de recursos do sistema; não detectam ou controlam uma sessão Apple automaticamente.

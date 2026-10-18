@@ -1,0 +1,58 @@
+LetMeSee - Windows x64 - versao de avaliacao
+
+Este pacote portatil contem o aplicativo LetMeSee compilado e seus scripts de
+configuracao. Nao inclui UxPlay, GStreamer, Bonjour, scrcpy ou ADB. Os motores sao
+preparados somente por uma acao sua no checklist; isso pode exigir internet.
+Nao e um instalador offline completo.
+
+REQUISITOS
+Windows 10 ou 11 de 64 bits com Microsoft .NET Framework 4.8. Use o Windows Update
+ou o site oficial Microsoft se o .NET Framework estiver ausente.
+
+ANTES DE EXTRAIR
+1. Baixe o ZIP e SHA256SUMS-windows.txt da MESMA release oficial:
+   https://github.com/francisco-efjr/LetMeSee/releases
+2. No PowerShell, confira o hash do ZIP baixado:
+   Get-FileHash -LiteralPath '.\LetMeSee-1.2.0-windows-x64-portable.zip' -Algorithm SHA256
+   Compare os 64 caracteres com a linha desse arquivo em SHA256SUMS-windows.txt.
+   Se forem diferentes, nao use o pacote. O hash detecta alteracoes, mas nao
+   substitui assinatura digital nem confirma a seguranca de todos os componentes.
+3. No Explorador, clique com o botao direito no ZIP > Propriedades. Se aparecer
+   "Desbloquear", marque e aplique ANTES de extrair. O Windows pode marcar arquivos
+   baixados da internet; sem esse passo, os scripts locais sem assinatura podem
+   ser bloqueados pela politica RemoteSigned. Nao altere a politica global do
+   PowerShell e nao desative o antivirus ou o SmartScreen para executar o app.
+
+COMO ABRIR
+4. Extraia TODO o ZIP para uma pasta nova do seu usuario, por exemplo:
+   C:\Users\SEU-USUARIO\Apps\LetMeSee-1.2.0
+   Evite Program Files, pastas compartilhadas e extrair por cima de versoes antigas.
+   Nao execute de dentro do ZIP. Mantenha scripts/ e config/ junto do executavel.
+5. Leia SECURITY.md e THIRD_PARTY.md. Abra iniciar.bat ou LetMeSee.exe.
+6. Escolha o ambiente e conclua o checklist. A tela principal tera Ambiente e
+   Comecar a espelhar; os requisitos sao verificados novamente antes de iniciar.
+
+ANDROID
+Preparar Android baixa o pacote oficial scrcpy fixado por versao e SHA-256.
+USB dispensa rede e exige depuracao USB autorizada no aparelho. Wi-Fi exige rede
+confiavel e um aparelho com depuracao sem fio ja pareada; o app nao faz pareamento
+automatico. Revoque autorizacoes de depuracao que nao precisar mais no celular.
+
+IPHONE/IPAD
+Preparar AirPlay baixa separadamente o runtime legado fixado por SHA-256. O
+inventario de licencas desse runtime permanece pendente e ele nao e redistribuido
+neste ZIP. Bonjour e firewall exigem acoes separadas e podem pedir administrador.
+Use uma rede privada confiavel. Nao conceda permissoes em um computador gerenciado
+sem a orientacao de quem administra o ambiente.
+
+LIMITES DESTA AVALIACAO
+O executavel e os scripts nao possuem assinatura digital do mantenedor. Esta e
+uma pre-release para avaliacao: espelhamento em aparelhos fisicos, UAC, firewall,
+audio, acessibilidade e comportamento em todos os PCs ainda precisam de validacao.
+Nao ha garantia de recepcao de conteudo protegido ou audio de qualquer aplicativo.
+Nao envie PINs, gravacoes ou dados privados ao relatar problemas no GitHub.
+
+INTEGRIDADE DO CONTEUDO
+package-files.sha256 lista os arquivos do pacote e seus hashes individuais.
+Motores opcionais sao verificados separadamente antes do uso. Nenhum motor, MSI,
+driver ou servico e instalado simplesmente por abrir o LetMeSee.

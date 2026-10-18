@@ -1,5 +1,13 @@
 # Evidência de validação · incremento 1.2.0 · 2026-10-15
 
+## Preparação da pré-release · 2026-10-18
+
+A `main` do GitHub contém o merge `b291b06`. Os builds desse merge falharam: o Windows encontrou um handle de ZIP aberto no fixture e o compilador do runner macOS rejeitou capturas concorrentes de `self`. Essas falhas foram tratadas no preparo da release, com descarte de recursos/carga explícita das assemblies ZIP e capturas fracas explícitas nas tarefas Swift.
+
+O pipeline Windows agora produz um portátil somente do aplicativo, sem redistribuir o runtime legado com inventário pendente. Há testes próprios de composição, exclusão de componentes, inventário e checksum desse pacote. A publicação é uma ação separada, depois de conferir que os workflows Windows/macOS passaram **no commit usado na tag**. Os resultados da execução remota constam nos checks desse commit e nas notas da release; os números abaixo são o histórico local de 15/10, não resultados presumidos do novo CI.
+
+## Histórico da implementação local · 2026-10-15
+
 Ambiente de execução: macOS arm64 com Xcode 26.2/Swift 6.2.3 e Node. PowerShell oficial 7.6.7 foi usado apenas em `/tmp`, sem instalação de SDK ou dependência do produto. O build Windows foi conferido por compilação cruzada com referências oficiais .NET Framework 4.8.
 
 | Verificação executada | Resultado observado | Limite |

@@ -17,9 +17,12 @@ powershell -NoProfile -File .\tests\run-core-tests.ps1
 powershell -NoProfile -File .\tests\run-preparation-tests.ps1
 powershell -NoProfile -File .\tests\dependency_security.tests.ps1
 powershell -NoProfile -File .\tests\android-package.tests.ps1
+powershell -NoProfile -File .\tests\windows-package.tests.ps1
 ```
 
-Esperado no Windows: 9 grupos core, 16 grupos de preparação (incluindo fixture de processos Windows), 16 casos de pacotes/rollback e 4 verificações do pacote Android. Os testes usam arquivos/processos fictícios locais; não precisam de telefone ou de um UxPlay real.
+Esperado no Windows: 9 grupos core, 16 grupos de preparação (incluindo fixture de processos Windows), 17 casos de segurança/rollback e 4 verificações do pacote Android, além da suíte de empacotamento portátil. Os testes usam arquivos/processos fictícios locais; não precisam de telefone ou de um UxPlay real.
+
+Para gerar o mesmo pacote público, compile e execute `powershell -NoProfile -File .\scripts\package_windows.ps1 -Version 1.2.0`. O ZIP e seu checksum ficam em `dist/`. A lista de arquivos é explícita: motores nativos e instaladores de terceiros não são incluídos. `installer/setup.iss` continua disponível para revisão, mas o instalador completo não é produzido/publicado por esse fluxo enquanto o inventário de distribuição estiver pendente.
 
 No Mac desta implementação, passaram os 7 grupos core portáveis e 15 de preparação; os grupos Win32 ficaram SKIP. A compilação C#5 foi conferida com Roslyn e referências oficiais .NET Framework 4.8, x64 e warnings como erros. Passaram 57 verificações do domínio Swift, a suíte de infraestrutura e o build SwiftUI arm64. Isso não é execução do instalador Windows nem prova de transmissão física.
 
